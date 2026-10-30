@@ -147,3 +147,18 @@ A target reference must have the same sampling rate as the input. This remains a
 ## V1.9.9 — safe automatic bit depth
 
 For FFmpeg filter operations invoked from the CLI with `--depth auto`, output precision now follows the source's known PCM subtype (including 24-bit and 32/64-bit floating point) instead of incorrectly passing the literal `auto` to a codec table. Compressed or unspecified formats retain the conservative 24-bit PCM default. No source audio is overwritten. Two new real-audio regression checks cover native 24-bit and 32-bit float preservation.
+
+## V2.0.0 — install optional AI modules separately
+
+To keep Windows core small, `setup_ai_windows.bat` now supports installing **only the tool needed**, into a separate `.apt-ai` Python 3.11 x64 virtual environment. It does not run automatically, and model files are downloaded **only** when you explicitly supply `--with-models`. All existing tools and user audio remain untouched. Commands:
+
+```bat
+setup_ai_windows.bat --list
+setup_ai_windows.bat --module denoise --with-models
+setup_ai_windows.bat --module split --with-models
+setup_ai_windows.bat --module meter --with-models
+setup_ai_windows.bat --module pitch
+setup_ai_windows.bat --module dereverb
+```
+
+Omitting `--module` installs the original full set for backwards compatibility, but is **not recommended** for light installations. Model download hashes are checked against known pinned official artifacts. The AI venv may require gigabytes of disk space due to PyTorch; each module has its own requirements manifest to avoid unrelated installation work. Each selected neural model is still an optional inference runtime, not part of the lightweight core EXE. Windows 11 real-device neural inference remains pending user workstation verification.

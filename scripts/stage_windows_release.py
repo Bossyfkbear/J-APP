@@ -20,6 +20,9 @@ def stage(destination):
     shutil.copy2(root / 'ai_worker.py', worker / 'ai_worker.py')
     (destination / 'scripts').mkdir(exist_ok=True)
     shutil.copy2(root / 'scripts' / 'download_models.py', destination / 'scripts' / 'download_models.py')
+    shutil.copy2(root / 'scripts' / 'setup_ai_modules.py', destination / 'scripts' / 'setup_ai_modules.py')
+    shutil.copytree(root / 'requirements-ai-modules', destination / 'requirements-ai-modules',
+                    dirs_exist_ok=True)
     for name in ('requirements-ai-windows.txt', 'requirements.txt', 'setup_ai_windows.bat',
                  'setup_ffmpeg_windows.bat',
                  'README.md', 'THIRD_PARTY_NOTICES.md', 'INTEGRATION_STATUS.md',

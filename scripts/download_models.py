@@ -64,6 +64,9 @@ def install(name, directory):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Download pinned official models for subsequent offline use')
     parser.add_argument('--directory', type=Path, default=Path(__file__).resolve().parents[1] / 'models')
+    parser.add_argument('--model', choices=tuple(MODELS), action='append',
+                        help='Install only the named official model; repeat to select several. '
+                             'If omitted, install all three for legacy compatibility.')
     args = parser.parse_args()
-    for name in MODELS:
+    for name in dict.fromkeys(args.model or MODELS):
         install(name, args.directory)
