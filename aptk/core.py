@@ -243,6 +243,18 @@ def convert(src: Path, opts: dict) -> Path:
 
 def process_filter(src: Path, opts: dict, filter_expression: str, suffix: str) -> Path:
     depth = opts.get("depth", "24")
+    if depth == "auto":
+        stream = probe(src)["streams"][0]
+        codec = stream.get("codec_name", "")
+        bits = int(stream.get("bits_per_raw_sample") or stream.get("bits_per_sample") or 0)
+        if codec.startswith("pcm_f64"):
+            depth = "64f"
+        elif codec.startswith("pcm_f32"):
+            depth = "32f"
+        elif bits in (8, 16, 24, 32):
+            depth = str(bits)
+        else:
+            depth = "24"
     return run_output(src, suffix, opts, filters=filter_expression, depth=depth)
 
 

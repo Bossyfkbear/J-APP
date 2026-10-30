@@ -143,3 +143,7 @@ python cli.py mic source.wav --reference-path target_mic.wav --mic-strength 60 -
 ```
 
 A target reference must have the same sampling rate as the input. This remains a frequency-response matching EQ; it is **not** calibrated U87 microphone emulation or a perceptual certification.
+
+## V1.9.9 — safe automatic bit depth
+
+For FFmpeg filter operations invoked from the CLI with `--depth auto`, output precision now follows the source's known PCM subtype (including 24-bit and 32/64-bit floating point) instead of incorrectly passing the literal `auto` to a codec table. Compressed or unspecified formats retain the conservative 24-bit PCM default. No source audio is overwritten. Two new real-audio regression checks cover native 24-bit and 32-bit float preservation.
