@@ -121,3 +121,9 @@ If the ChatGPT GitHub connector lacks write permission, use `publish_and_build_w
 - Pure file renaming works even without FFmpeg. Other audio-processing tools still require the appropriate backend.
 - Windows CI now runs a *frozen-EXE* audio smoke test using included synthetic data: preserves a 48 kHz mono floating-point WAV, generates a 44.1 kHz/24-bit WAV, avoids filename collisions, and verifies the input SHA-256 is unchanged. The frozen test emits `native-audio-smoke.json` in the artifact.
 - This verifies neither device playback nor the sound of a user recording. FFmpeg and optional AI models remain external; Windows host CI has not yet run due to GitHub authorization.
+
+## V1.9.6: optional measured microphone tonal EQ
+
+The microphone-tone tool now accepts a separate reference recording, ideally the **same voice recorded in the same environment and source position**, at the same sample rate. It calculates a conservative one-third-octave tonal EQ (max ±6 dB; adjustable strength), applies a linear-phase FIR in bounded-size blocks, and exports a 32-bit float WAV with the source's original frame count, sample rate and channel count. It never overwrites original recordings. Without a reference, the earlier experimental U87-inspired EQ preset remains available.
+
+**Not calibrated U87 emulation:** a spectral match does not model microphone noise, polar response, proximity effect or electronics. U87 target measurements have not been supplied. This tool remains a development feature requiring professional listening acceptance.

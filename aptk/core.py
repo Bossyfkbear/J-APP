@@ -570,7 +570,19 @@ def run_tool(tool: str, src: Path, opts: dict) -> tuple[str, Path | None]:
     elif tool == "deess":
         p = process_filter(src, opts, "deesser=i=0.15:m=0.55:f=0.55", "_deess")
     elif tool == "mic":
-        k = max(0, min(100, float(opts.get("mic_strength", "65")))) / 100
+        strength = float(opts.get("mic_strength", "65"))
+        if not math.isfinite(strength) or not 0 <= strength <= 100:
+            raise ToolkitError("麥克風音色強度必須是 0–100%")
+        reference = str(opts.get("reference_path", "")).strip()
+        if reference:
+            from .mic_match import process
+            p = unique_output(output_root(src, opts.get('destination', '')),
+                              src.stem + '_mic_tonal_match', '.wav')
+            report = process(src, reference, p, strength=strength, cancelled=CANCEL.is_set)
+            return (f"完成參考音色 EQ 匹配：{src.name} → {p.name} / "
+                    f"{report['channels']} ch, {report['source_sample_rate']} Hz, float WAV。"
+                    "這不是 U87 物理模擬。", p)
+        k = strength / 100
         filt = ",".join([
             "highpass=f=55",
             f"equalizer=f=170:t=q:w=0.8:g={.8*k:.3f}",

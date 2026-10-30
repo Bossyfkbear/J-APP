@@ -59,7 +59,7 @@ TOOLS = [
         ("ai_status", "AI 模型狀態", "檢查本機模型能否載入", "選裝模型"),
     ]),
     ("音色與檔案", [
-        ("mic", "麥克風音色", "U87 風格 EQ 草案，非 U87 實測模型", "實驗功能"),
+        ("mic", "麥克風音色", "可用參考錄音做頻譜匹配 EQ，或使用原 U87 風格草案", "實驗功能"),
         ("rename", "批次重新命名", "複製並命名，不動原檔", "核心功能"),
         ("compare", "音檔比對", "檢查波形相關性與差異 RMS", "選裝分析"),
         ("verify", "完整精度比對", "全檔逐聲道比對，不降採樣", "核心功能"),
@@ -97,8 +97,9 @@ OPTIONS = {
               ("model_dir","本機 Demucs 模型資料夾", "folder", [], ""),
               ("model_name","模型名稱（單一模型可留空）", "text", [], ""),
               ("runtime_python","AI Python（留空自動選取）", "file", [], "")],
-    "mic": [("mic_strength","U87 風格 EQ 強度 (%)", "select", ["25","50","65","80","100"], "65"),
-            ("depth","輸出精度", "select", ["24","32f"], "24")],
+    "mic": [("mic_strength","音色匹配／EQ 強度 (%)", "select", ["0","25","50","65","80","100"], "65"),
+            ("reference_path","目標麥克風參考錄音 (可選)", "file", [], ""),
+            ("depth","未選參考檔時 EQ 輸出精度", "select", ["24","32f"], "24")],
     "rename": [("prefix","檔名開頭", "text", [], "Audio_"),
                ("number_start","起始編號", "text", [], "1"),
                ("padding","編號位數", "select", ["3","4","5","6"], "4")],
@@ -123,7 +124,7 @@ EXTRA = {
     "ai_denoise": "需本機 DeepFilterNet 模型與相容環境。內部使用 48 kHz，輸出還原來源取樣率、聲道及已知 PCM 精度；有損來源輸出 24-bit WAV。不會恢復模型頻寬外的細節。",
     "split": "需另外安裝 Demucs 並選取本機模型資料夾。模式 vocal：人聲與伴奏；four：人聲、鼓、貝斯、其他。",
     "rhythm": "使用 NumPy / SoundFile 分析。BPM 與 Key 為推估結果；拍號尚無可靠模型，不提供虛假結果。",
-    "mic": "這只是 U87 傾向的 EQ 音色草案，不是精確 U87 模型。沒有實測原始／目標麥克風資料時，不能保證轉換準確。",
+    "mic": "提供同聲源、同環境、相同取樣率的目標麥克風 WAV/FLAC/AIFF，進行保守 EQ 匹配（最多 ±6 dB，輸出 32f WAV）；不會模擬 U87 的指向性、瞬態或電子特性。不選參考檔則保留原本的 U87 風格 EQ 草案。",
     "rename": "安全複製新檔名，不搬動或覆蓋原始音檔。",
     "chords": "和弦估計可能受複雜混音影響。",
     "progression": "羅馬數字依估計調性解讀，需人工核對。",
@@ -379,11 +380,17 @@ class App(BASE_TK):
                 control.pack(fill="x")
             elif kind in ("folder", "file"):
                 tk.Entry(slot,textvariable=val,bg=SURFACE_2,fg=FG,insertbackground=FG).pack(fill="x")
-                def choose_path(v=val, k=kind):
-                    path=(filedialog.askdirectory(title="選擇本機模型資料夾") if k=='folder'
-                          else filedialog.askopenfilename(title="選擇 AI 環境的 Python 執行檔"))
+                def choose_path(v=val, k=kind, option_key=key):
+                    if k == 'folder':
+                        path = filedialog.askdirectory(title="選擇本機模型資料夾")
+                    elif option_key == 'reference_path':
+                        path = filedialog.askopenfilename(title="選擇目標麥克風參考錄音",
+                            filetypes=[("無損音檔", "*.wav *.wave *.flac *.aif *.aiff"), ("所有檔案", "*.*")])
+                    else:
+                        path = filedialog.askopenfilename(title="選擇 AI 環境的 Python 執行檔")
                     if path: v.set(path)
-                self.button(slot,"選擇資料夾" if kind=='folder' else "選擇 Python",choose_path).pack(anchor="w")
+                text = "選擇資料夾" if kind=='folder' else "選擇參考音檔" if key=='reference_path' else "選擇 Python"
+                self.button(slot,text,choose_path).pack(anchor="w")
             else:
                 tk.Entry(slot,textvariable=val,bg=SURFACE_2,fg=FG,insertbackground=FG,relief="flat",font=(FONT,11)).pack(fill="x",ipady=8)
         self.fields.columnconfigure(0,weight=1)
