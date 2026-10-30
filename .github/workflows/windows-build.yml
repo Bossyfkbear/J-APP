@@ -80,7 +80,7 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "Frozen audio processing failed: exit $($process.ExitCode)" }
           if (!(Test-Path $reportPath)) { throw 'Frozen audio smoke report missing' }
           $report = Get-Content $reportPath -Raw | ConvertFrom-Json
-          if (!$report.ok -or !$report.source_sha256_unchanged -or !$report.auto_float_48k_mono -or !$report.pcm24_44100_mono -or !$report.output_collision_avoided -or !$report.stereo_pcm24_preserved) {
+          if (!$report.ok -or !$report.source_sha256_unchanged -or !$report.auto_float_48k_mono -or !$report.pcm24_44100_mono -or !$report.output_collision_avoided -or !$report.stereo_pcm24_preserved -or !$report.mic_match_float_stereo_preserved) {
             throw 'Frozen audio processing checks failed'
           }
           Write-Host 'Frozen WAV 32f, 24-bit resampling and unchanged-source verification passed.'

@@ -28,6 +28,7 @@ def main(argv=None):
     parser.add_argument('--noise-amount', default='12')
     parser.add_argument('--strength', default='0.5', help='WPE dry/wet mix (0 to 1)')
     parser.add_argument('--mic-strength', default='65')
+    parser.add_argument('--reference-path', default='', help='Optional matching-microphone target WAV/FLAC/AIFF (same rate as source)')
     parser.add_argument('--target-i', default='-16')
     parser.add_argument('--target-tp', default='-1.5')
     parser.add_argument('--target-lra', default='11')

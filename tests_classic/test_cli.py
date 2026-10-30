@@ -33,3 +33,23 @@ class CLITests(unittest.TestCase):
             self.assertEqual(p.returncode, 0, p.stderr)
             self.assertIn(b'OUTPUT:', p.stdout)
             self.assertTrue(list((folder/'out').glob('*.wav')))
+    def test_mic_reference_tonal_match_without_ffmpeg(self):
+        import numpy as np
+        import soundfile as sf
+        with tempfile.TemporaryDirectory() as folder_name:
+            folder = Path(folder_name)
+            rate = 48000
+            samples = np.random.default_rng(50).normal(0, .04, rate * 2)
+            original = folder / '原始錄音.wav'
+            target = folder / 'reference.wav'
+            sf.write(original, samples, rate, subtype='PCM_24')
+            sf.write(target, .6*samples+.4*np.roll(samples, 1), rate, subtype='PCM_24')
+            command = [sys.executable, str(ROOT/'cli.py'), 'mic', str(original),
+                       '--reference-path', str(target), '--mic-strength', '60',
+                       '--destination', str(folder/'outputs')]
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            outputs = list((folder/'outputs').glob('*_mic_tonal_match.wav'))
+            self.assertEqual(len(outputs), 1)
+            self.assertEqual(sf.info(outputs[0]).frames, len(samples))
+            self.assertEqual(sf.info(outputs[0]).subtype, 'FLOAT')

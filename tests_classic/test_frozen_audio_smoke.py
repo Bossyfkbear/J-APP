@@ -9,4 +9,5 @@ def test_native_audio_smoke_source_and_output_formats():
     assert report['pcm24_44100_mono'] is True
     assert report['auto_float_48k_mono'] is True
     assert report['stereo_pcm24_preserved'] is True
+    assert report['mic_match_float_stereo_preserved'] is True
     assert report['device_playback_tested'] is False

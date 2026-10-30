@@ -113,12 +113,27 @@ def audio_smoke():
             raise RuntimeError('Stereo PCM-24 decoded samples differ after lossless conversion')
         if hashlib.sha256(stereo_source.read_bytes()).hexdigest() != stereo_digest:
             raise RuntimeError('Stereo PCM-24 source was modified')
+        # Exercise the real, optional microphone matching code IN the frozen EXE.
+        from aptk.mic_match import process as mic_match_process
+        reference = output / 'Target mic reference.wav'
+        sf.write(reference, 0.85 * stereo + 0.15 * np.roll(stereo, 1, axis=0),
+                 48000, subtype='PCM_24')
+        mic_output = output / 'Matched mic float.wav'
+        mic_result = mic_match_process(stereo_source, reference, mic_output, strength=65)
+        mic_info = sf.info(mic_output)
+        if (mic_info.samplerate, mic_info.channels, mic_info.frames, mic_info.subtype) != (
+                48000, 2, 48000, 'FLOAT'):
+            raise RuntimeError(f'Frozen microphone match output mismatch: {mic_info}')
+        if (mic_result['frames'] != 48000 or
+                hashlib.sha256(stereo_source.read_bytes()).hexdigest() != stereo_digest):
+            raise RuntimeError('Frozen microphone matching changed the source or length')
     intact = hashlib.sha256(source.read_bytes()).hexdigest() == original
     if not intact:
         raise RuntimeError('Input audio changed during frozen processing')
     return {'ok': True, 'source_sha256_unchanged': intact,
             'auto_float_48k_mono': True, 'pcm24_44100_mono': True,
             'output_collision_avoided': True, 'stereo_pcm24_preserved': True,
+            'mic_match_float_stereo_preserved': True,
             'device_playback_tested': False}
 
 

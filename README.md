@@ -133,3 +133,13 @@ The microphone-tone tool now accepts a separate reference recording, ideally the
 A new **環境檢查 / Environment Check** module runs *without selecting audio*. It reports the installed FFmpeg, FFprobe, FFplay, NumPy and SoundFile and whether an output device is detected. Windows development releases now include **setup_ffmpeg_windows.bat**, a user-initiated optional installation helper using the Windows Package Manager (`winget install --exact --id Gyan.FFmpeg`). It asks for explicit approval, downloads neither on application launch nor without consent, and does not bundle FFmpeg into the lightweight EXE. Reopen the app after installation so PATH refreshes.
 
 The measured microphone reference-EQ mode uses bundled NumPy/SoundFile and does not require FFmpeg, whereas the fallback U87-inspired EQ uses FFmpeg. No model installation or U87 calibration is implied by successful diagnostics.
+
+## V1.9.8 — frozen mic-match and CLI acceptance
+
+The Windows packaged executable's synthetic audio smoke test now runs the **actual measured microphone matching FIR**, checks output 48 kHz stereo / 32-bit float / exact 48,000 frames, and verifies the original source SHA256 did not change. A source-level CLI regression also exercises the same option without relying on an FFmpeg filter. Use:
+
+```text
+python cli.py mic source.wav --reference-path target_mic.wav --mic-strength 60 --destination output
+```
+
+A target reference must have the same sampling rate as the input. This remains a frequency-response matching EQ; it is **not** calibrated U87 microphone emulation or a perceptual certification.
