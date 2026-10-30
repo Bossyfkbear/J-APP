@@ -32,7 +32,8 @@ class WorkerLifecycleTests(unittest.TestCase):
             target = Path(tmp) / 'result.wav'
             child = "import json,pathlib,sys; p=pathlib.Path(sys.argv[1]); (p/'output.wav').write_bytes(b'complete'); (p/'result.json').write_text(json.dumps({'ok':True,'result':{}}))"
             result = run_job('denoise', destination=target, command=[sys.executable, '-c', child])
-            self.assertEqual(result['output'], str(target))
+            # Windows can return the long form of a temporary 8.3 path.
+            self.assertTrue(Path(result['output']).samefile(target))
             self.assertEqual(target.read_bytes(), b'complete')
             with self.assertRaises(FileExistsError):
                 run_job('denoise', destination=target, command=[sys.executable, '-c', child])

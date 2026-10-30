@@ -8,6 +8,11 @@ from aptk import core
 TOOLS = ('convert','denoise','residual','ai_denoise','dereverb','declick','declip','deess','mic','loudscan','normalize','silence','inspect','quality','rhythm','pitch','meter','split','chords','progression','ai_status')
 
 def main(argv=None):
+    # Redirected Windows consoles may use a code page without Chinese glyphs.
+    # Reporting a successful conversion must not turn it into a failed job.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(errors='backslashreplace')
     parser = argparse.ArgumentParser(description='Audio Post Toolkit: offline batch processing')
     parser.add_argument('tool', choices=TOOLS)
     parser.add_argument('files', nargs='+', type=Path)
