@@ -79,3 +79,7 @@ FFmpeg; see README for required tools and optional installs.
 GitHub Actions [confirmed Windows build](https://github.com/Bossyfkbear/J-APP/actions/runs/41109767399) produced an EXE folder and passed frozen GUI and synthetic-audio smoke tests. Newly successful main-branch runs publish a versioned prerelease under [Releases](https://github.com/Bossyfkbear/J-APP/releases), with the same ZIP and SHA256 record. The Actions artifact is retained up to 90 days; the prerelease download remains available unless manually removed.
 
 On Windows 11, extract the full ZIP and run `AudioPostToolkit/AudioPostToolkit.exe`. Ensure external FFmpeg and FFprobe are on PATH or beside the EXE. For ffplay preview, also provide ffplay. Physical soundcard checks, real-session listening, AI model runtimes and U87 calibration have **not** passed end-user acceptance.
+
+## GitHub permissions and dependable downloads
+
+The Actions artifact (90-day retention) is the **authoritative build output** once tests and packaging pass. The optional GitHub Release publication can fail with HTTP 403 (`Resource not accessible by integration`) despite the EXE itself building correctly. The workflow now warns and points to the Actions run rather than marking a verified executable as broken. To have indefinite Release downloads, the repository owner must ensure GitHub Actions has effective Contents write permission; no assumption is made that it is currently granted. The earlier `dev-build-7` prerelease exists.

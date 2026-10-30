@@ -4,7 +4,7 @@ Offline desktop toolkit for audio file analysis, conversion, music estimates, in
 
 ## Windows 11 development download
 
-**Built Windows development EXE is available through GitHub Actions.** A confirmed successful Windows run is [41109767399](https://github.com/Bossyfkbear/J-APP/actions/runs/41109767399). New successful `main` builds now publish versioned, permanent **pre-releases** under [Releases](https://github.com/Bossyfkbear/J-APP/releases). This is not an installer and is not yet a production-validated audio product.
+**Built Windows development EXE is available through GitHub Actions.** A confirmed successful Windows run is [41109767399](https://github.com/Bossyfkbear/J-APP/actions/runs/41109767399). Successful builds publish a 90-day **Actions artifact**. A permanent [prerelease](https://github.com/Bossyfkbear/J-APP/releases) is also attempted when GitHub grants the workflow a suitable token; GitHub may reject that optional step with HTTP 403. This is not an installer and is not yet a production-validated audio product.
 
 Download `AudioPostToolkit-Windows-Development.zip` from the newest successful prerelease (or the `AudioPostToolkit-Windows-Development` artifact of a successful Actions run), extract **the complete folder**, and run `AudioPostToolkit/AudioPostToolkit.exe`. Keep the supporting files with the EXE. FFmpeg and FFprobe must be installed on PATH or placed beside the EXE; FFplay is needed for individual preview. Optional AI weights/Python are installed only at user request with `setup_ai_windows.bat`. No website deployment is involved. Actual Windows audio-device playback and real-recording quality still require acceptance.
 
