@@ -164,6 +164,9 @@ class App(BASE_TK):
         self.playback_in_progress = False
         self.playback_confirmed_in_session = False
         self.qa_running = False
+        self.ai_verify_running = False
+        self.ai_verify_process = None
+        self.ai_test_module = tk.StringVar(value='denoise')
         self.events: queue.Queue = queue.Queue()
         self.preview_process = None
         self.ab_player = None
@@ -409,6 +412,14 @@ class App(BASE_TK):
             slot.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0,10))
             self.text(slot, '實機聲音輸出（需自行確認有聽到）', size=10, color=SECONDARY).pack(anchor='w', pady=(0,5))
             self.button(slot, '▶ 播放 1 秒低音量測試音', self.test_output_device).pack(anchor='w')
+            ai = tk.Frame(self.fields, bg=BG)
+            ai.grid(row=1,column=0,columnspan=2,sticky='ew',pady=(8,10))
+            self.text(ai,'已安裝 AI 模組：本機實際運算自測（不使用私人錄音）',
+                      size=10,color=SECONDARY).pack(anchor='w',pady=(0,6))
+            ttk.Combobox(ai,textvariable=self.ai_test_module,
+                         values=['denoise','split','meter','pitch','dereverb'],
+                         state='readonly',style='Dark.TCombobox',width=18).pack(side='left')
+            self.button(ai,'執行所選模型推論自測',self.test_installed_ai).pack(side='left',padx=10)
         if tool in ("setup","loudscan","quality","inspect","rhythm","compare","align","silence","verify","pitch"):
             self.fields_label.config(text="分析設定" if rows else "分析工具（不修改原檔）")
         else:
@@ -607,6 +618,61 @@ class App(BASE_TK):
         self.worker_thread=threading.Thread(target=worker,daemon=False)
         self.worker_thread.start()
 
+    def test_installed_ai(self):
+        if self.is_running or self.ai_verify_running:
+            return
+        from apt.worker import app_directory
+        root=app_directory()
+        interpreter=root/'.apt-ai'/'Scripts'/'python.exe' if os.name=='nt' else root/'.apt-ai'/'bin'/'python'
+        script=root/'scripts'/'verify_optional_ai.py'
+        if not interpreter.is_file() or not script.is_file():
+            messagebox.showinfo('AI 本機實測',
+                '找不到已安裝的 AI Python 或驗收程式。請先執行所需模組的 setup_ai_windows.bat。')
+            return
+        chosen=self.ai_test_module.get()
+        if chosen not in ('denoise','split','meter','pitch','dereverb'):
+            return
+        if not messagebox.askokcancel('AI 本機實測',
+                f'將使用已安裝的 {chosen} 模組處理 8 秒合成音，不讀取私人錄音，也不下載模型。\\nCPU 模型可能需要較長運算時間。是否執行？'):
+            return
+        self.ai_verify_running=True
+        self.log(f'AI 模型實際推論測試開始：{chosen}（不下載模型）')
+        def work():
+            proc=None
+            try:
+                flags={'creationflags':getattr(subprocess,'CREATE_NO_WINDOW',0)} if os.name=='nt' else {}
+                env=dict(os.environ,PYTHONIOENCODING='utf-8',PYTHONUTF8='1')
+                proc=subprocess.Popen([str(interpreter),str(script),'--module',chosen],
+                    cwd=str(root),stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,text=True,encoding='utf-8',errors='replace',
+                    env=env,**flags)
+                self.ai_verify_process=proc
+                out,err=proc.communicate(timeout=900)
+                self.events.put(('ai_verify_result',chosen,proc.returncode,out[-3000:],err[-3000:]))
+            except subprocess.TimeoutExpired:
+                if proc is not None and proc.poll() is None:
+                    self._kill_ai_test(proc)
+                self.events.put(('ai_verify_result',chosen,1,'','AI 模型自測逾時（15 分鐘上限）'))
+            except Exception as exc:
+                self.events.put(('ai_verify_result',chosen,1,'',str(exc)))
+            finally:
+                self.ai_verify_process=None
+        threading.Thread(target=work,daemon=True).start()
+
+    @staticmethod
+    def _kill_ai_test(proc):
+        if proc.poll() is not None:
+            return
+        if os.name=='nt':
+            try:
+                subprocess.run(['taskkill','/PID',str(proc.pid),'/T','/F'],
+                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=4,
+                    creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            except (OSError,subprocess.TimeoutExpired):
+                pass
+        if proc.poll() is None:
+            proc.terminate()
+
     def start_technical_qa(self):
         if self.qa_running or self.is_running:
             return
@@ -648,6 +714,9 @@ class App(BASE_TK):
         if self.is_running:
             core.cancel()
             self.state_label.config(text="正在取消…",fg=WARNING)
+        if self.ai_verify_running and self.ai_verify_process is not None:
+            self._kill_ai_test(self.ai_verify_process)
+            self.log('已要求中止 AI 模型自測。')
 
     def _drain_events(self):
         try:
@@ -671,6 +740,18 @@ class App(BASE_TK):
                         except Exception as exc:
                             self.stop_preview()
                             self.log(f'A/B 無法播放：{exc}')
+                elif event[0]=='ai_verify_result':
+                    _,name,returncode,out,error=event
+                    self.ai_verify_running=False
+                    self.log(f'{name} 模型推論自測：{"成功" if returncode==0 else "失敗"}')
+                    if out.strip(): self.log(out.strip())
+                    if error.strip(): self.log(error.strip())
+                    if returncode==0:
+                        messagebox.showinfo('AI 自測成功',
+                            f'{name} 已完成合成測試音的本機推論。這不代表對真人錄音的音質驗收。')
+                    else:
+                        messagebox.showwarning('AI 自測失敗',
+                            f'{name} 本機模型運算未通過。請查看 PROCESS LOG 的套件／模型錯誤。')
                 elif event[0]=='qa_ready':
                     _,path,ok,error=event
                     self.qa_running=False
@@ -774,6 +855,8 @@ class App(BASE_TK):
     def _close(self):
         if self.is_running:
             core.cancel()
+        if self.ai_verify_process is not None:
+            self._kill_ai_test(self.ai_verify_process)
         self.stop_preview()
         self.destroy()
 
