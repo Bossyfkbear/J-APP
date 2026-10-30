@@ -195,6 +195,14 @@ def audio_smoke():
         if (mic_result['frames'] != 48000 or
                 hashlib.sha256(stereo_source.read_bytes()).hexdigest() != stereo_digest):
             raise RuntimeError('Frozen microphone matching changed the source or length')
+        from aptk.acceptance import publish_report
+        qa_path, qa_result = publish_report(stereo_source, stereo_output,
+                                            destination=str(output))
+        if (not qa_path.is_file() or not qa_result['technical_integrity_pass']
+                or not qa_result['checks']['sample_rate_preserved']
+                or not qa_result['checks']['channel_count_preserved']
+                or hashlib.sha256(stereo_source.read_bytes()).hexdigest() != stereo_digest):
+            raise RuntimeError('Frozen technical acceptance report or source integrity failed')
     intact = hashlib.sha256(source.read_bytes()).hexdigest() == original
     if not intact:
         raise RuntimeError('Input audio changed during frozen processing')
@@ -202,6 +210,7 @@ def audio_smoke():
             'auto_float_48k_mono': True, 'pcm24_44100_mono': True,
             'output_collision_avoided': True, 'stereo_pcm24_preserved': True,
             'mic_match_float_stereo_preserved': True,
+            'qa_report_generated': True,
             'device_playback_tested': False}
 
 

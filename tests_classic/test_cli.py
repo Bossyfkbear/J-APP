@@ -53,3 +53,31 @@ class CLITests(unittest.TestCase):
             self.assertEqual(len(outputs), 1)
             self.assertEqual(sf.info(outputs[0]).frames, len(samples))
             self.assertEqual(sf.info(outputs[0]).subtype, 'FLOAT')
+
+    def test_cli_technical_qa_valid_and_no_overwrite(self):
+        import json
+        import numpy as np
+        import soundfile as sf
+        with tempfile.TemporaryDirectory() as root:
+            folder=Path(root)
+            source=folder/'原音.wav'
+            processed=folder/'處理後.wav'
+            x=.03*np.sin(np.arange(48000)*2*np.pi*400/48000)
+            sf.write(source,x,48000,subtype='PCM_24')
+            sf.write(processed,x*.7,48000,subtype='PCM_24')
+            command=[sys.executable,str(ROOT/'cli.py'),'qa',str(source),str(processed),
+                     '--destination',str(folder/'report')]
+            a=subprocess.run(command,capture_output=True,text=True)
+            b=subprocess.run(command,capture_output=True,text=True)
+            self.assertEqual(a.returncode,0,a.stderr)
+            self.assertEqual(b.returncode,0,b.stderr)
+            self.assertIn('TECHNICAL_INTEGRITY: PASS',a.stdout)
+            output=list((folder/'report').glob('*.json'))
+            self.assertEqual(len(output),2)
+            self.assertTrue(all(json.loads(p.read_text())['technical_integrity_pass'] for p in output))
+
+    def test_cli_qa_requires_two_files(self):
+        command=[sys.executable,str(ROOT/'cli.py'),'qa',str(ROOT/'validation'/'audio'/'enhanced.wav')]
+        result=subprocess.run(command,capture_output=True,text=True)
+        self.assertEqual(result.returncode,1)
+        self.assertIn('requires exactly two files',result.stderr)

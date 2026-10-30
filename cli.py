@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 from aptk import core
 
-TOOLS = ('convert','denoise','residual','ai_denoise','dereverb','declick','declip','deess','mic','loudscan','normalize','silence','inspect','quality','rhythm','pitch','meter','split','chords','progression','ai_status')
+TOOLS = ('convert','denoise','residual','ai_denoise','dereverb','declick','declip','deess','mic','loudscan','normalize','silence','inspect','quality','rhythm','pitch','meter','split','chords','progression','ai_status','qa')
 
 def main(argv=None):
     # Redirected Windows consoles may use a code page without Chinese glyphs.
@@ -36,6 +36,20 @@ def main(argv=None):
     opts = vars(args)
     opts['destination'] = args.destination
     core.CANCEL.clear()
+    if args.tool == 'qa':
+        if len(args.files) != 2:
+            print('ERROR: qa requires exactly two files: original.wav processed.wav', file=sys.stderr)
+            return 1
+        try:
+            from aptk.acceptance import publish_report
+            report_path, report = publish_report(args.files[0], args.files[1],
+                                                 args.destination, cancelled=core.CANCEL.is_set)
+            print(f'TECHNICAL_INTEGRITY: {"PASS" if report["technical_integrity_pass"] else "CHECK"}')
+            print(f'OUTPUT: {report_path}')
+            return 0 if report['technical_integrity_pass'] else 1
+        except (OSError, ValueError, RuntimeError, ImportError) as exc:
+            print(f'ERROR: {exc}', file=sys.stderr)
+            return 1
     failures = 0
     for src in args.files:
         if not src.is_file():

@@ -186,3 +186,13 @@ The single-clock A/B audition now checks the **default output device's sample ra
 ## V2.0.6 — local source/output engineering QA report
 
 Once a selected audio file has been processed, click **生成原音／輸出技術驗收報告 JSON** in the waveform/A-B section. The app reads both full files offline, computes their SHA-256 hashes, checks sample rate, channel count, exact duration difference, PCM subtype, per-channel sample peaks, RMS, clipped and nonfinite samples, and confirms neither file changed during the check. The JSON report is saved under the selected output folder using staging and non-overwriting publication. Differences in rate/channel/duration are warnings, not automatic failures, because they may be deliberate exports. A PASS only means the file is technically readable and stable; it **does not measure true peak, LUFS, AI artifacts or listening quality.** It never transmits audio.
+
+## V2.0.7 — automate the offline engineering QA from the command line
+
+In addition to the GUI QA button, the same **no-overwrite JSON report** is now available for scripted batch workflows:
+
+```text
+python cli.py qa original.wav processed.wav --destination QA_Reports
+```
+
+The CLI requires exactly two files, exits nonzero for corrupt/unreadable audio, and never uploads anything. A PASS means basic *technical file integrity*, not perceptual quality. The Windows frozen EXE smoke test also generates a real engineering QA JSON from synthetic stereo files and verifies unmodified source SHA-256.
