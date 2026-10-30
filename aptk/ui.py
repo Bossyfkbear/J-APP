@@ -107,7 +107,7 @@ OPTIONS = {
 }
 
 EXTRA = {
-    "setup": "不需要音檔：檢查 FFmpeg／FFprobe／ffplay、NumPy、SoundFile、聲音裝置與 AI 工作環境，不會安裝套件或上傳資料。缺少 FFmpeg 可執行 setup_ffmpeg_windows.bat 手動安裝。",
+    "setup": "不需要音檔：檢查 FFmpeg／FFprobe／ffplay、NumPy、SoundFile、聲音裝置與五個選裝 AI 模組。可手動播放 -30 dBFS 的 1 秒測試音，並自行確認是否聽到。檢查不會安裝套件或上傳資料。缺少 FFmpeg 可執行 setup_ffmpeg_windows.bat。",
     "meter": "使用官方 Beat This! 預訓練模型分析前 3 分鐘的拍點、小節起點與每小節偵測拍數。使用本機模型，不上傳音檔。樂譜拍號仍需人工確認。",
     "pitch": "pYIN 追蹤單人聲或單樂器的基頻、音名及音分，非多聲部扒譜。範圍 50–1200 Hz，最多分析前 10 分鐘；可能有八度誤判。",
     "verify": "比對兩檔的全部解碼樣本，保留原取樣率及各聲道。取樣率或聲道不同會列出差異，不產生誤導性的相減結果。不是聽感評分。",
@@ -161,6 +161,8 @@ class App(BASE_TK):
         self.destination = tk.StringVar(value="")
         self.output_file: Path | None = None
         self.is_running = False
+        self.playback_in_progress = False
+        self.playback_confirmed_in_session = False
         self.events: queue.Queue = queue.Queue()
         self.preview_process = None
         self.ab_player = None
@@ -397,6 +399,11 @@ class App(BASE_TK):
                 tk.Entry(slot,textvariable=val,bg=SURFACE_2,fg=FG,insertbackground=FG,relief="flat",font=(FONT,11)).pack(fill="x",ipady=8)
         self.fields.columnconfigure(0,weight=1)
         self.fields.columnconfigure(1,weight=1)
+        if tool == 'setup':
+            slot = tk.Frame(self.fields, bg=BG)
+            slot.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0,10))
+            self.text(slot, '實機聲音輸出（需自行確認有聽到）', size=10, color=SECONDARY).pack(anchor='w', pady=(0,5))
+            self.button(slot, '▶ 播放 1 秒低音量測試音', self.test_output_device).pack(anchor='w')
         if tool in ("setup","loudscan","quality","inspect","rhythm","compare","align","silence","verify","pitch"):
             self.fields_label.config(text="分析設定" if rows else "分析工具（不修改原檔）")
         else:
@@ -595,6 +602,23 @@ class App(BASE_TK):
         self.worker_thread=threading.Thread(target=worker,daemon=False)
         self.worker_thread.start()
 
+    def test_output_device(self):
+        if self.playback_in_progress:
+            return
+        if not messagebox.askokcancel('實機聲音測試',
+                '將使用電腦預設播放設備播放 1 秒、-30 dBFS 的低音量測試音。\n請先將音量調低，確認喇叭／耳機已連接。'):
+            return
+        self.playback_in_progress = True
+        self.log('開始手動輸出設備測試；不使用麥克風、不錄音、不上傳音訊。')
+        def worker():
+            try:
+                from .device_check import play_speaker_test
+                result = play_speaker_test()
+                self.events.put(('device_test', result, None))
+            except Exception as exc:
+                self.events.put(('device_test', None, f'{type(exc).__name__}: {exc}'))
+        threading.Thread(target=worker, daemon=True).start()
+
     def cancel_work(self):
         if self.is_running:
             core.cancel()
@@ -622,6 +646,20 @@ class App(BASE_TK):
                         except Exception as exc:
                             self.stop_preview()
                             self.log(f'A/B 無法播放：{exc}')
+                elif event[0]=='device_test':
+                    _,result,error=event
+                    self.playback_in_progress = False
+                    if error:
+                        self.log(f'輸出設備測試失敗：{error}')
+                        messagebox.showerror('播放設備測試', error)
+                    elif result:
+                        heard = messagebox.askyesno(
+                            '實機聲音驗收',
+                            '是否確實從預設耳機或喇叭聽到 1 秒測試音？\n'
+                            '只有你親自確認，才會記錄這次播放測試通過。')
+                        self.playback_confirmed_in_session = bool(heard)
+                        self.log('本次播放測試：使用者確認有聲音' if heard else
+                                 '本次播放測試：未確認聽到聲音（需檢查音效裝置與音量）')
                 elif event[0]=="wave":
                     _,req,data=event
                     if req==self.waveform_request:

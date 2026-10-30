@@ -170,3 +170,7 @@ The app's **Environment Check** now reports package presence separately for Deep
 ## V2.0.2 — Windows packaged AI setup verification
 
 Windows CI now launches **the actual included `setup_ai_windows.bat --list`** inside the finished EXE distribution, validates that all five independent requirement manifests are shipped, and verifies the command does not require or install neural dependencies. The batch script accepts an explicit `APT_PYTHON` environment override, otherwise locates Python 3.11 x64 using the Windows `py` launcher or `python`. It does not install optional packages on application launch.
+
+## V2.0.3 — physical output audition (requires a user)
+
+The Environment Check panel now provides an **explicitly triggered** low-level stereo speaker test: 1 second, 660 Hz, peak at most -30 dBFS, 50 ms fade-in/out. The app asks for permission before playback and for an explicit hearing confirmation afterwards. It never uses or records a microphone and never sends audio elsewhere. The report only reflects the user's session-local confirmation; CI tests the deterministic test waveform and bounds but **cannot verify audible playback** without the user's actual Windows sound hardware and ears. This is a setup aid, not final professional audio listening QA.
