@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import tempfile
+import time
 from apt.files import publish_file
 from dataclasses import dataclass
 from typing import Callable
@@ -89,6 +90,50 @@ def run_command(args: list[str], *, allow_failure: bool = False) -> str:
                 raise ToolkitError((msg or stdout.decode("utf-8", errors="replace"))[-1500:])
             return msg + "\n" + stdout.decode("utf-8", errors="replace")
         finally:
+            with PROCESS_LOCK:
+                if ACTIVE_PROCESS is process:
+                    ACTIVE_PROCESS = None
+
+
+def run_binary_command(args: list[str], *, timeout: float = 120) -> bytes:
+    """Cancellable raw PCM capture without a flashing Windows console."""
+    global ACTIVE_PROCESS
+    if CANCEL.is_set():
+        raise ToolkitError("已取消")
+    if timeout <= 0 or not math.isfinite(timeout):
+        raise ValueError("Binary command timeout must be positive and finite")
+    options = {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0)} if os.name == 'nt' else {}
+    with subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, **options) as process:
+        with PROCESS_LOCK:
+            ACTIVE_PROCESS = process
+        deadline = time.monotonic() + timeout
+        try:
+            while True:
+                if CANCEL.is_set():
+                    raise ToolkitError("已取消")
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise ToolkitError("音訊分析逾時，已停止處理")
+                try:
+                    data, stderr = process.communicate(timeout=min(0.25, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+            if CANCEL.is_set():
+                raise ToolkitError("已取消")
+            if process.returncode:
+                raise ToolkitError(stderr.decode("utf-8", "replace")[-1500:] or
+                                   f"音訊解碼失敗（exit {process.returncode}）")
+            return data
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.communicate(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate()
             with PROCESS_LOCK:
                 if ACTIVE_PROCESS is process:
                     ACTIVE_PROCESS = None
@@ -320,22 +365,11 @@ def compare_files(first: Path, second: Path) -> str:
     ffmpeg, _ = require_ffmpeg()
     # Decode mono at fixed analysis rate; streamed in bounded 2-minute chunks.
     def decode(path: Path) -> np.ndarray:
-        args = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(path), "-t", "120", "-map", "0:a:0", "-ac", "1", "-ar", "8000", "-f", "f32le", "-"]
-        global ACTIVE_PROCESS
-        if CANCEL.is_set():
-            raise ToolkitError("已取消")
-        with subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL) as process:
-            with PROCESS_LOCK:
-                ACTIVE_PROCESS = process
-            try:
-                payload, stderr = process.communicate()
-                if process.returncode:
-                    raise ToolkitError(stderr.decode("utf-8", "replace")[-500:])
-            finally:
-                with PROCESS_LOCK:
-                    if ACTIVE_PROCESS is process:
-                        ACTIVE_PROCESS = None
-        return np.frombuffer(payload, dtype="<f4")
+        args = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error",
+                "-i", str(path), "-t", "120", "-map", "0:a:0",
+                "-ac", "1", "-ar", "8000", "-f", "f32le", "-"]
+        return np.frombuffer(run_binary_command(args, timeout=90), dtype="<f4")
+
     a, b = decode(first), decode(second)
     n = min(a.size, b.size)
     if n < 8000:
@@ -356,13 +390,11 @@ def estimate_alignment(first: Path, second: Path) -> str:
     import numpy as np
     ffmpeg, _ = require_ffmpeg()
     def read(path):
-        cmd = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(path),
-               "-t", "45", "-map", "0:a:0", "-ac", "1", "-ar", "2000", "-f", "f32le", "-"]
-        proc = subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE, timeout=60)
-        if proc.returncode:
-            raise ToolkitError(proc.stderr.decode("utf-8", "replace")[-500:])
-        return np.frombuffer(proc.stdout, dtype="<f4").astype(np.float64)
+        cmd = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error",
+               "-i", str(path), "-t", "45", "-map", "0:a:0",
+               "-ac", "1", "-ar", "2000", "-f", "f32le", "-"]
+        return np.frombuffer(run_binary_command(cmd, timeout=60),
+                             dtype="<f4").astype(np.float64)
     a, b = read(first), read(second)
     if min(len(a), len(b)) < 4000:
         raise ToolkitError("需要至少兩秒可分析的音訊")
@@ -579,11 +611,11 @@ def waveform_peaks(src: Path, bins: int = 360) -> list[float]:
     """First 2 minutes only. Constant memory, no scientific Python dependencies."""
     ffmpeg, _ = require_ffmpeg()
     cmd = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(src), "-t", "120", "-map", "0:a:0", "-ac", "1", "-ar", "2000", "-f", "s16le", "-"]
-    proc = subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
-    if proc.returncode or not proc.stdout:
+    payload = run_binary_command(cmd, timeout=30)
+    if not payload:
         return []
     samples = array.array("h")
-    samples.frombytes(proc.stdout[:len(proc.stdout)//2*2])
+    samples.frombytes(payload[:len(payload)//2*2])
     if sys.byteorder == "big":
         samples.byteswap()
     segment = max(1, math.ceil(len(samples)/bins))
