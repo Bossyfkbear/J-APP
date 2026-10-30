@@ -1,7 +1,10 @@
 # Windows build — GitHub is optional
 
-The source archive contains no built EXE. The workflow is prepared but has not
-been submitted to a repository or run. It does not publish a website or release.
+The source archive contains no built EXE. The GitHub Actions workflow is now
+active and has successfully generated a Windows development EXE folder.
+Successful main-branch builds publish a **development prerelease** with a
+downloadable ZIP and SHA-256 record. No website is deployed.
+The prerelease is not a claim of device-playback or perceptual sound quality.
 
 ## Local Windows build
 
@@ -70,3 +73,9 @@ equality so that a regression causing unintended mono downmix fails the build.
 A green build still does not prove acoustic transparency on arbitrary source material,
 physical soundcard compatibility, or AI model quality. The release folder needs external
 FFmpeg; see README for required tools and optional installs.
+
+## Published development prereleases (2026-10-31)
+
+GitHub Actions [confirmed Windows build](https://github.com/Bossyfkbear/J-APP/actions/runs/41109767399) produced an EXE folder and passed frozen GUI and synthetic-audio smoke tests. Newly successful main-branch runs publish a versioned prerelease under [Releases](https://github.com/Bossyfkbear/J-APP/releases), with the same ZIP and SHA256 record. The Actions artifact is retained up to 90 days; the prerelease download remains available unless manually removed.
+
+On Windows 11, extract the full ZIP and run `AudioPostToolkit/AudioPostToolkit.exe`. Ensure external FFmpeg and FFprobe are on PATH or beside the EXE. For ffplay preview, also provide ffplay. Physical soundcard checks, real-session listening, AI model runtimes and U87 calibration have **not** passed end-user acceptance.

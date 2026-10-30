@@ -2,6 +2,12 @@
 
 Offline desktop toolkit for audio file analysis, conversion, music estimates, integrity inspection and optional local AI speech denoising. It never uploads audio or downloads models automatically.
 
+## Windows 11 development download
+
+**Built Windows development EXE is available through GitHub Actions.** A confirmed successful Windows run is [41109767399](https://github.com/Bossyfkbear/J-APP/actions/runs/41109767399). New successful `main` builds now publish versioned, permanent **pre-releases** under [Releases](https://github.com/Bossyfkbear/J-APP/releases). This is not an installer and is not yet a production-validated audio product.
+
+Download `AudioPostToolkit-Windows-Development.zip` from the newest successful prerelease (or the `AudioPostToolkit-Windows-Development` artifact of a successful Actions run), extract **the complete folder**, and run `AudioPostToolkit/AudioPostToolkit.exe`. Keep the supporting files with the EXE. FFmpeg and FFprobe must be installed on PATH or placed beside the EXE; FFplay is needed for individual preview. Optional AI weights/Python are installed only at user request with `setup_ai_windows.bat`. No website deployment is involved. Actual Windows audio-device playback and real-recording quality still require acceptance.
+
 ## Run from source
 
 Requires Python 3.10+, NumPy and SoundFile. Install `requirements.txt`, then:
@@ -12,7 +18,7 @@ python cli.py --help
 python -m apt --help
 ```
 
-FFmpeg and FFprobe must be on PATH or beside the application. `build_windows.bat` requires Windows/Python 3.11 x64, uses `.venv-apt-core`, and builds a lightweight `dist/AudioPostToolkit/AudioPostToolkit.exe` plus its supporting folder. Torch/models are external. Keep the entire folder together. The script also stages optional-worker sources, dependency notices and a native GUI diagnostic. It has not been run on Windows; no EXE is included in this source archive.
+FFmpeg and FFprobe must be on PATH or beside the application. `build_windows.bat` requires Windows/Python 3.11 x64, uses `.venv-apt-core`, and builds a lightweight `dist/AudioPostToolkit/AudioPostToolkit.exe` plus its supporting folder. Torch/models are external. Keep the entire folder together. The script also stages optional-worker sources, dependency notices and a native GUI diagnostic. A successful Windows Actions run has built the EXE; the source archive itself does not include compiled binaries.
 
 For optional local AI, run `setup_ai_windows.bat`; add `--with-models` to explicitly download checksum-verified official DeepFilterNet3 and htdemucs models during setup. Subsequent processing is offline. This creates `.apt-ai` beside the source or EXE and does not change another Python environment. The GUI can also select an existing Python executable. Re-run setup if the folder is moved.
 
@@ -78,12 +84,12 @@ AI processing resamples internally to the model's sample rate; retaining the sou
 - Calibrated U87 emulation needs paired source/target measurements; the microphone preset remains explicitly an EQ experiment. Reliable automatic meter identification is unfinished.
 - WPE and pYIN are implemented; they still need acceptance on real recording sessions. Music estimates have not been benchmarked on a labelled corpus. One speech denoise fixture does not certify transparency.
 - GUI visual inspection and physical-device A/B playback are not verified here. Automatic A/B delay estimation is not implemented; manual compensation and loudness matching are available.
-- Windows executable creation and runtime validation must be done on Windows.
+- Windows EXE creation and frozen smoke checks passed on a Windows CI runner; physical audio-device and real-recording quality still need workstation verification.
 
 This is an in-progress personal utility, not a certified restoration or mastering system.
 
 GitHub is optional. See `WINDOWS_BUILD.md` for local Windows builds; the optional
-cloud workflow has not been uploaded or executed. Optional setup with
+cloud workflow is active and has produced a Windows development artifact. Optional setup with
 --with-models also downloads the pinned Beat This! checkpoint.
 
 Export fixes: custom loudness targets now apply to both analysis and processing;
