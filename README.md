@@ -178,3 +178,7 @@ The Environment Check panel now provides an **explicitly triggered** low-level s
 ## V2.0.4 — correct audio interface clock for speaker check
 
 The opt-in physical speaker test queries the **default output interface** instead of assuming every device supports 48 kHz. It validates stereo playback settings and uses the interface's actual default sample rate (including 44.1 kHz) for a low-volume one-second signal. The test still requires the user to explicitly confirm hearing it.
+
+## V2.0.5 — A/B preview follows the actual audio interface sample rate
+
+The single-clock A/B audition now checks the **default output device's sample rate** and uses it for decoding, loudness comparison and sounddevice playback (44.1 kHz, 48 kHz and other supported rates). Crossfades remain 5 ms regardless of rate and A/B switching retains the playback cursor. Decoding explicitly uses FFmpeg and does not touch or overwrite source audio. Automated Windows tests cover a mocked 44.1 kHz device and actual 48→44.1 kHz files; a workstation test is still needed to confirm real physical device playback and audio quality.

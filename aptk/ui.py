@@ -639,7 +639,7 @@ class App(BASE_TK):
                     if request==self.ab_request:
                         try:
                             from .ab_preview import ABPlayer
-                            self.ab_player=ABPlayer(a,b)
+                            self.ab_player=ABPlayer(a,b,sample_rate=details['playback_sample_rate'])
                             self.ab_player.start()
                             self.log('同步 A/B 播放中：A 原音；切換不重設播放位置。')
                             self.log(f"預聽：B 補償 {details['processed_offset_ms']:.1f} ms；B 增益 {details['b_gain_db']:.2f} dB；共同增益 {details['common_gain_db']:.2f} dB。音檔未修改。")
@@ -702,7 +702,8 @@ class App(BASE_TK):
             messagebox.showinfo('同步 A/B','選取的來源尚無對應音訊輸出；請先處理此檔案。')
             return
         try:
-            import sounddevice
+            from .ab_preview import choose_output_rate
+            playback_rate = choose_output_rate()
             start=float(self.ab_start.get()); duration=float(self.ab_seconds.get())
             offset=float(self.ab_offset.get()); matched=bool(self.ab_match.get())
             if start<0 or not 0.1<=duration<=120:
@@ -712,11 +713,11 @@ class App(BASE_TK):
             return
         self.stop_preview()
         request=self.ab_request
-        self.log('準備同步預聽片段…')
+        self.log(f'準備同步預聽片段…使用輸出設備預設 {playback_rate} Hz')
         def prepare():
             try:
                 from .ab_preview import prepare_pair
-                a,b,details=prepare_pair(source,processed,start,duration,processed_offset_ms=offset,match_loudness=matched,return_info=True)
+                a,b,details=prepare_pair(source,processed,start,duration,processed_offset_ms=offset,match_loudness=matched,return_info=True,sample_rate=playback_rate)
                 self.events.put(('ab_ready',request,a,b,details))
             except Exception as exc:
                 self.events.put(('log',f'A/B 準備失敗：{exc}'))
