@@ -7,6 +7,73 @@ import subprocess
 import sys
 
 
+def inspect_optional_modules(root=None):
+    """Report installed optional runtimes WITHOUT loading models or using network."""
+    import os
+    import json
+    import subprocess
+    from .worker import app_directory
+    root = Path(root) if root is not None else app_directory()
+    root = root.absolute()
+    models = root / 'models'
+    env = root / '.apt-ai'
+    candidate = env / ('Scripts/python.exe' if sys.platform == 'win32' else 'bin/python')
+    requirements = {
+        'denoise': ('torch', 'torchaudio', 'df'),
+        'split': ('torch', 'torchaudio', 'demucs'),
+        'meter': ('torch', 'torchaudio', 'beat_this'),
+        'pitch': ('librosa',),
+        'dereverb': ('nara_wpe', 'scipy'),
+    }
+    files = {
+        'denoise': (models / 'DeepFilterNet3' / 'config.ini').is_file() and
+                   (models / 'DeepFilterNet3' / 'checkpoints').is_dir(),
+        'split': (models / 'Demucs' / '955717e8-8726e21a.th').is_file() and
+                 (models / 'Demucs' / 'htdemucs.yaml').is_file(),
+        'meter': (models / 'BeatThis' / 'final0.ckpt').is_file(),
+    }
+    output = {
+        'installed_python': str(candidate) if candidate.is_file() else None,
+        'packages': {},
+        'modules': {},
+        'models_found': files,
+        'tested_inference': False,
+        'note': 'Read-only package/model presence checks, not neural processing acceptance.',
+    }
+    if candidate.is_file():
+        script = ("import importlib.util,json; names="
+                  "['torch','torchaudio','df','demucs','beat_this','librosa','nara_wpe','scipy'];"
+                  "print(json.dumps({name:bool(importlib.util.find_spec(name)) for name in names}))")
+        flags = {'creationflags': subprocess.CREATE_NO_WINDOW} if sys.platform == 'win32' else {}
+        restore_dll = sys.platform == 'win32' and getattr(sys, 'frozen', False)
+        if restore_dll:
+            import ctypes
+            ctypes.windll.kernel32.SetDllDirectoryW(None)
+        try:
+            result = subprocess.run([str(candidate), '-I', '-c', script],
+                                    capture_output=True, text=True, timeout=15,
+                                    cwd=str(root), **flags)
+            if result.returncode == 0:
+                output['packages'] = json.loads(result.stdout)
+            else:
+                output['error'] = result.stderr[-800:] or f'Python exited {result.returncode}'
+        except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+            output['error'] = f'{type(exc).__name__}: {exc}'
+        finally:
+            if restore_dll:
+                import ctypes
+                ctypes.windll.kernel32.SetDllDirectoryW(str(sys._MEIPASS))
+    for module, packages in requirements.items():
+        found = all(output['packages'].get(name, False) for name in packages)
+        model = bool(files.get(module, True))
+        output['modules'][module] = {
+            'dependencies_installed': found,
+            'local_model_present': model if module in files else None,
+            'ready_for_manual_test': found and model,
+        }
+    return output
+
+
 def collect(check_gui=False):
     from aptk.core import find_executable
     from .worker import worker_command
@@ -56,9 +123,10 @@ def collect(check_gui=False):
                                   'playback_verified': False}
     except Exception as exc:
         report['audio_device']['error'] = str(exc)
+    report['optional_modules'] = inspect_optional_modules()
     report['core_ready'] = all(report['executables'][n]['available'] for n in ('ffmpeg','ffprobe')) and all(report['packages'][n]['available'] for n in ('numpy','soundfile'))
     report['release_verified'] = False
-    report['remaining'] = ['Native Windows GUI and real audio-device playback', 'User-recording listening acceptance', 'Calibrated U87 source/target measurement data']
+    report['remaining'] = ['Native Windows GUI and real audio-device playback', 'Native neural model inference and listening acceptance', 'User-recording listening acceptance', 'Calibrated U87 source/target measurement data']
     return report
 
 

@@ -510,8 +510,17 @@ class App(BASE_TK):
         try:
             # Measured mic matching uses SoundFile; pure rename and checks
             # do not require FFmpeg at all.
-            needs_ffmpeg = (self.tool not in ('ai_status', 'setup', 'rename') and
-                            not (self.tool == 'mic' and opts.get('reference_path')))
+            # Neural tools, WPE, pYIN, beat tracking and music analysis operate
+            # directly on WAV/FLAC/AIFF via SoundFile. They should not refuse
+            # to start merely because the optional FFmpeg decoder is absent.
+            # Their worker can request FFmpeg later for incompatible sources.
+            requires_ffmpeg = {
+                'convert', 'denoise', 'residual', 'declick', 'declip', 'deess',
+                'loudscan', 'normalize', 'silence', 'inspect', 'quality',
+                'compare', 'align',
+            }
+            needs_ffmpeg = self.tool in requires_ffmpeg or (
+                self.tool == 'mic' and not opts.get('reference_path'))
             if needs_ffmpeg:
                 core.require_ffmpeg()
         except core.ToolkitError as e:

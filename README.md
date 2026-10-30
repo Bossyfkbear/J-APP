@@ -162,3 +162,7 @@ setup_ai_windows.bat --module dereverb
 ```
 
 Omitting `--module` installs the original full set for backwards compatibility, but is **not recommended** for light installations. Model download hashes are checked against known pinned official artifacts. The AI venv may require gigabytes of disk space due to PyTorch; each module has its own requirements manifest to avoid unrelated installation work. Each selected neural model is still an optional inference runtime, not part of the lightweight core EXE. Windows 11 real-device neural inference remains pending user workstation verification.
+
+## V2.0.1 — independent optional AI readiness checks
+
+The app's **Environment Check** now reports package presence separately for DeepFilterNet denoise, Demucs separation, Beat This! beat detection, pYIN pitch and WPE dereverb. For neural models, it also verifies that expected local model files exist. The probe runs the optional Python environment with isolated flags and does **not** import PyTorch models, perform inference, install anything or use the network; `ready_for_manual_test` does **not** mean professionally validated. A module that can decode audio with SoundFile may start on WAV/FLAC/AIFF without requiring FFmpeg; other tools and compressed sources still need their respective external codec backends.
