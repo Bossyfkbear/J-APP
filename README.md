@@ -196,3 +196,18 @@ python cli.py qa original.wav processed.wav --destination QA_Reports
 ```
 
 The CLI requires exactly two files, exits nonzero for corrupt/unreadable audio, and never uploads anything. A PASS means basic *technical file integrity*, not perceptual quality. The Windows frozen EXE smoke test also generates a real engineering QA JSON from synthetic stereo files and verifies unmodified source SHA-256.
+
+## V2.0.8 — opt-in real AI inference smoke tests (Windows)
+
+For a module already installed with `setup_ai_windows.bat`, the new **`verify_ai_windows.bat`** runs the *actual* installed model against 8 seconds of synthetic stereo test audio, checks the produced result and ensures the input is unchanged. Commands:
+
+```bat
+verify_ai_windows.bat --list
+verify_ai_windows.bat --module denoise
+verify_ai_windows.bat --module split
+verify_ai_windows.bat --module meter
+verify_ai_windows.bat --module pitch
+verify_ai_windows.bat --module dereverb
+```
+
+No audio recording, model download, network call or dependency installation is performed by the verification script. A successful result is evidence of **local model execution only**, not professional perceptual quality, real-world microphone emulation or physical audio-interface playback. On a computer without downloaded model weights, model self-test fails explicitly instead of pretending to have passed. Windows CI only verifies the tool and its packaging; it **does not install and run these large AI models automatically**.

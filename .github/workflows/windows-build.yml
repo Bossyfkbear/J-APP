@@ -95,6 +95,13 @@ jobs:
               }
             }
             if (!(Test-Path 'scripts/setup_ai_modules.py')) { throw 'Optional module setup script was not bundled' }
+            if (!(Test-Path 'scripts/verify_optional_ai.py') -or !(Test-Path 'verify_ai_windows.bat')) {
+              throw 'Optional real-model verification tool was not bundled'
+            }
+            $aiTestList = cmd /c verify_ai_windows.bat --list | Out-String
+            if ($LASTEXITCODE -ne 0 -or !$aiTestList.Contains('"denoise"')) {
+              throw 'Bundled AI verification tool cannot list modules'
+            }
             $listing = cmd /c setup_ai_windows.bat --list | Out-String
             if ($LASTEXITCODE -ne 0) { throw 'Optional Windows AI setup --list failed' }
             foreach ($module in @('denoise','split','meter','pitch','dereverb')) {
