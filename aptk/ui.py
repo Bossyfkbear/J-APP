@@ -132,6 +132,18 @@ EXTRA = {
     "align": "需選裝 numpy。分析前 45 秒的音量包絡，估計 ±20 秒偏移；不修改音檔，請人工核對。",
 }
 
+def selected_preview_path(files: list[Path], selection, output_pairs: dict, *, processed: bool = False) -> Path | None:
+    """Resolve preview by selected source, never by an unrelated last batch output."""
+    if not files:
+        return None
+    index = selection[0] if selection and 0 <= selection[0] < len(files) else 0
+    source = Path(files[index])
+    if not processed:
+        return source
+    value = output_pairs.get(str(source.resolve()))
+    return Path(value) if value else None
+
+
 class App(BASE_TK):
     def __init__(self):
         super().__init__()
@@ -601,7 +613,7 @@ class App(BASE_TK):
         self.after(100,self._drain_events)
 
     def play_audio(self, output: bool):
-        path=self.output_file if output else (self.files[self.file_list.curselection()[0]] if self.files and self.file_list.curselection() else self.files[0] if self.files else None)
+        path=selected_preview_path(self.files, self.file_list.curselection(), self.output_pairs, processed=output)
         if not path or not path.is_file() or path.suffix.lower()==".txt":
             messagebox.showinfo("無法預聽","請先選取音檔，或完成一次音訊輸出。")
             return
@@ -620,9 +632,8 @@ class App(BASE_TK):
         if not self.files:
             messagebox.showinfo('同步 A/B','請先選擇已處理過的來源音檔。')
             return
-        index=self.file_list.curselection()
-        source=self.files[index[0] if index else 0]
-        processed=self.output_pairs.get(str(source.resolve()))
+        source=selected_preview_path(self.files, self.file_list.curselection(), self.output_pairs)
+        processed=selected_preview_path(self.files, self.file_list.curselection(), self.output_pairs, processed=True)
         if not processed or not processed.is_file():
             messagebox.showinfo('同步 A/B','選取的來源尚無對應音訊輸出；請先處理此檔案。')
             return

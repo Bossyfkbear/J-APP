@@ -95,7 +95,7 @@ def run_command(args: list[str], *, allow_failure: bool = False) -> str:
                     ACTIVE_PROCESS = None
 
 
-def run_binary_command(args: list[str], *, timeout: float = 120) -> bytes:
+def run_binary_command(args: list[str], *, timeout: float = 120, track_active: bool = True) -> bytes:
     """Cancellable raw PCM capture without a flashing Windows console."""
     global ACTIVE_PROCESS
     if CANCEL.is_set():
@@ -105,8 +105,9 @@ def run_binary_command(args: list[str], *, timeout: float = 120) -> bytes:
     options = {'creationflags': getattr(subprocess, 'CREATE_NO_WINDOW', 0)} if os.name == 'nt' else {}
     with subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, **options) as process:
-        with PROCESS_LOCK:
-            ACTIVE_PROCESS = process
+        if track_active:
+            with PROCESS_LOCK:
+                ACTIVE_PROCESS = process
         deadline = time.monotonic() + timeout
         try:
             while True:
@@ -134,9 +135,10 @@ def run_binary_command(args: list[str], *, timeout: float = 120) -> bytes:
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.communicate()
-            with PROCESS_LOCK:
-                if ACTIVE_PROCESS is process:
-                    ACTIVE_PROCESS = None
+            if track_active:
+                with PROCESS_LOCK:
+                    if ACTIVE_PROCESS is process:
+                        ACTIVE_PROCESS = None
 
 
 def probe(path: Path) -> dict:
@@ -611,7 +613,7 @@ def waveform_peaks(src: Path, bins: int = 360) -> list[float]:
     """First 2 minutes only. Constant memory, no scientific Python dependencies."""
     ffmpeg, _ = require_ffmpeg()
     cmd = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(src), "-t", "120", "-map", "0:a:0", "-ac", "1", "-ar", "2000", "-f", "s16le", "-"]
-    payload = run_binary_command(cmd, timeout=30)
+    payload = run_binary_command(cmd, timeout=30, track_active=False)
     if not payload:
         return []
     samples = array.array("h")

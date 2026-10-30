@@ -18,3 +18,10 @@ The previous main commit `99294e9` passed **Windows development build** on GitHu
 - Test sound-device A/B, physical preview and optional AI environment on actual session material.
 - Check artist/audio engineer listening acceptance and model quality; U87 is still experimental EQ.
 - No website is needed: this is a Windows desktop tool, not a web app.
+
+## Batch audition correction
+
+- The **Output Preview** button now resolves the selected source file to its own most recent processed audio, rather than playing the unrelated last item from a batch.
+- Synchronized A/B uses the same selection logic.
+- Waveform preview subprocesses are intentionally untracked so an asynchronous preview cannot replace the active processing job's cancellation target.
+- Regression tests cover paired sources, missing outputs and empty selection.
