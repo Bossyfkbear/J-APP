@@ -1,0 +1,47 @@
+{
+  "output": "audio/enhanced.wav",
+  "engine": "DeepFilterNet",
+  "sample_rate": 48000,
+  "model_sample_rate": 48000,
+  "subtype": "FLOAT",
+  "channels": 1,
+  "source_sample_rate": 48000,
+  "frames": 384001,
+  "quality": {
+    "path": "audio/enhanced.wav",
+    "sample_rate": 48000,
+    "channels": 1,
+    "frames": 384001,
+    "duration_seconds": 8.000020833333334,
+    "subtype": "FLOAT",
+    "sample_peak": [
+      0.4576455056667328
+    ],
+    "sample_peak_dbfs": [
+      -6.789415965884054
+    ],
+    "rms": [
+      0.06973027191091882
+    ],
+    "rms_dbfs": [
+      -23.131572825492523
+    ],
+    "clipped_samples": [
+      0
+    ],
+    "nonfinite_samples": [
+      0
+    ],
+    "warning": "Sample peak only; not true peak, LUFS or perceptual quality."
+  },
+  "note": "Neural processing is not bit-perfect; listen for artifacts.",
+  "fixture": "LibriSpeech 5703-47212-0000, first 8s, librosa libri1, CC-BY 4.0; deterministic added white noise at 0 dB SNR",
+  "input_snr_db": -4.906131037462425e-07,
+  "output_snr_db": 14.327941811121505,
+  "elapsed_seconds": 2.4192056300000786,
+  "original_unchanged": true,
+  "audio_sha256": {
+    "noisy_0db.wav": "d59adb59b74096aa1a4ac6a09ac98c2b06115c3f51b091ff3d20054d10ed5a43",
+    "enhanced.wav": "e256d14d0941d22f77380b01c7f901dd321dad4031206435efaf2f0f675796bc"
+  }
+}

@@ -1,0 +1,18 @@
+# Local Python/build artifacts, never commit model caches or secrets
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv*/
+.apt-ai/
+models/
+build/
+dist/
+*.spec
+*.log
+*.partial
+.env
+.env.*
+!.env.example
+
+# Downloaded CI artifacts
+windows-build-artifact/

@@ -1,0 +1,13 @@
+# Candidate Windows CPU build environment; requires Python 3.11 x64.
+# Native Windows inference/build validation is still required.
+--extra-index-url https://download.pytorch.org/whl/cpu
+numpy==1.26.4
+torch==2.5.1+cpu
+torchaudio==2.5.1+cpu
+deepfilternet==0.5.6
+demucs==4.0.1
+scipy==1.14.1
+nara-wpe==0.0.11
+librosa==0.10.2.post1
+packaging==23.2
+beat-this==1.1.0
