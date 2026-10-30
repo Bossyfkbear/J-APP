@@ -211,3 +211,7 @@ verify_ai_windows.bat --module dereverb
 ```
 
 No audio recording, model download, network call or dependency installation is performed by the verification script. A successful result is evidence of **local model execution only**, not professional perceptual quality, real-world microphone emulation or physical audio-interface playback. On a computer without downloaded model weights, model self-test fails explicitly instead of pretending to have passed. Windows CI only verifies the tool and its packaging; it **does not install and run these large AI models automatically**.
+
+## V2.0.9 — Windows Unicode QA regression
+
+The CLI's technical-acceptance test explicitly reads UTF-8 JSON, independent of the Windows console ANSI code page. The QA report itself always writes UTF-8 and preserves Traditional Chinese messages and file names; no audio-processing behavior changed.

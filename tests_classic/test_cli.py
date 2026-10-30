@@ -74,7 +74,7 @@ class CLITests(unittest.TestCase):
             self.assertIn('TECHNICAL_INTEGRITY: PASS',a.stdout)
             output=list((folder/'report').glob('*.json'))
             self.assertEqual(len(output),2)
-            self.assertTrue(all(json.loads(p.read_text())['technical_integrity_pass'] for p in output))
+            self.assertTrue(all(json.loads(p.read_text(encoding='utf-8'))['technical_integrity_pass'] for p in output))
 
     def test_cli_qa_requires_two_files(self):
         command=[sys.executable,str(ROOT/'cli.py'),'qa',str(ROOT/'validation'/'audio'/'enhanced.wav')]
