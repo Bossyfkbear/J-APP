@@ -174,3 +174,7 @@ Windows CI now launches **the actual included `setup_ai_windows.bat --list`** in
 ## V2.0.3 — physical output audition (requires a user)
 
 The Environment Check panel now provides an **explicitly triggered** low-level stereo speaker test: 1 second, 660 Hz, peak at most -30 dBFS, 50 ms fade-in/out. The app asks for permission before playback and for an explicit hearing confirmation afterwards. It never uses or records a microphone and never sends audio elsewhere. The report only reflects the user's session-local confirmation; CI tests the deterministic test waveform and bounds but **cannot verify audible playback** without the user's actual Windows sound hardware and ears. This is a setup aid, not final professional audio listening QA.
+
+## V2.0.4 — correct audio interface clock for speaker check
+
+The opt-in physical speaker test queries the **default output interface** instead of assuming every device supports 48 kHz. It validates stereo playback settings and uses the interface's actual default sample rate (including 44.1 kHz) for a low-volume one-second signal. The test still requires the user to explicitly confirm hearing it.

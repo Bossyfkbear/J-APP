@@ -27,12 +27,15 @@ def make_test_tone(*, sample_rate=48000, duration=1.0, frequency=660.0, level_db
 
 def play_speaker_test():
     import sounddevice as sd
-    outputs = [d for d in sd.query_devices() if d['max_output_channels'] >= 2]
-    if not outputs:
-        raise RuntimeError('No stereo output device detected')
-    test = make_test_tone()
+    device = sd.query_devices(kind='output')
+    if device['max_output_channels'] < 2:
+        raise RuntimeError('The selected default output device does not support stereo')
+    sample_rate = int(round(device.get('default_samplerate') or 48000))
+    # Respect native device rate: avoids forcing 48 kHz on a 44.1 kHz-only DAC.
+    sd.check_output_settings(samplerate=sample_rate, channels=2, dtype='float32')
+    test = make_test_tone(sample_rate=sample_rate)
     # Explicit user action only. PortAudio uses current default stereo output.
-    sd.play(test, samplerate=48000, blocking=True)
+    sd.play(test, samplerate=sample_rate, blocking=True)
     return {'played': True, 'level_dbfs': -30, 'duration_seconds': 1,
-            'confirmed_heard': False,
+            'output_sample_rate': sample_rate, 'confirmed_heard': False,
             'note': 'A successful API call cannot prove that audio was audible; user must confirm.'}
