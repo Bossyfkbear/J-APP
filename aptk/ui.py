@@ -163,6 +163,7 @@ class App(BASE_TK):
         self.is_running = False
         self.playback_in_progress = False
         self.playback_confirmed_in_session = False
+        self.qa_running = False
         self.events: queue.Queue = queue.Queue()
         self.preview_process = None
         self.ab_player = None
@@ -312,6 +313,10 @@ class App(BASE_TK):
         self.text(adjust,'B 延遲補償 ms（正值跳過 B 開頭）',size=9,bg=SURFACE).pack(side='left')
         tk.Entry(adjust,textvariable=self.ab_offset,width=7).pack(side='left',padx=6)
         tk.Checkbutton(adjust,text='預聽響度匹配',variable=self.ab_match,bg=SURFACE,fg=FG,selectcolor=SURFACE_2,activebackground=SURFACE).pack(side='left')
+        qc=tk.Frame(wavecard,bg=SURFACE)
+        qc.pack(fill='x',padx=16,pady=(0,11))
+        self.button(qc,'生成原音／輸出技術驗收報告 JSON',self.start_technical_qa).pack(side='left')
+        self.text(qc,'只檢查技術規格；仍需實際聽感驗收',size=9,bg=SURFACE,color=SECONDARY).pack(side='left',padx=10)
 
         control=tk.Frame(self.editor,bg=BG)
         control.pack(fill="x",pady=(0,10))
@@ -602,6 +607,26 @@ class App(BASE_TK):
         self.worker_thread=threading.Thread(target=worker,daemon=False)
         self.worker_thread.start()
 
+    def start_technical_qa(self):
+        if self.qa_running or self.is_running:
+            return
+        source=selected_preview_path(self.files,self.file_list.curselection(),self.output_pairs)
+        processed=selected_preview_path(self.files,self.file_list.curselection(),self.output_pairs,processed=True)
+        if not source or not processed or not processed.is_file():
+            messagebox.showinfo('技術驗收報告','請先處理選取的音檔，並確認有對應的輸出檔。')
+            return
+        folder=self.destination.get()
+        self.qa_running=True
+        self.log('技術驗收：讀取來源與輸出音檔，產生本機 JSON 報告…')
+        def worker():
+            try:
+                from .acceptance import publish_report
+                path,report=publish_report(source,processed,folder)
+                self.events.put(('qa_ready',str(path),report['technical_integrity_pass'],None))
+            except Exception as exc:
+                self.events.put(('qa_ready',None,False,f'{type(exc).__name__}: {exc}'))
+        threading.Thread(target=worker,daemon=True).start()
+
     def test_output_device(self):
         if self.playback_in_progress:
             return
@@ -646,6 +671,15 @@ class App(BASE_TK):
                         except Exception as exc:
                             self.stop_preview()
                             self.log(f'A/B 無法播放：{exc}')
+                elif event[0]=='qa_ready':
+                    _,path,ok,error=event
+                    self.qa_running=False
+                    if error:
+                        self.log(f'技術驗收報告失敗：{error}')
+                        messagebox.showerror('技術驗收報告',error)
+                    else:
+                        self.log(f'本機技術驗收報告已保存：{path}（基本完整性：{"通過" if ok else "需檢查"}）')
+                        messagebox.showinfo('技術驗收報告',f'已儲存：\n{path}\n\n基本完整性：{"通過" if ok else "需檢查"}\n注意：本報告不等同聽感驗收。')
                 elif event[0]=='device_test':
                     _,result,error=event
                     self.playback_in_progress = False

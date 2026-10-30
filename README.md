@@ -182,3 +182,7 @@ The opt-in physical speaker test queries the **default output interface** instea
 ## V2.0.5 — A/B preview follows the actual audio interface sample rate
 
 The single-clock A/B audition now checks the **default output device's sample rate** and uses it for decoding, loudness comparison and sounddevice playback (44.1 kHz, 48 kHz and other supported rates). Crossfades remain 5 ms regardless of rate and A/B switching retains the playback cursor. Decoding explicitly uses FFmpeg and does not touch or overwrite source audio. Automated Windows tests cover a mocked 44.1 kHz device and actual 48→44.1 kHz files; a workstation test is still needed to confirm real physical device playback and audio quality.
+
+## V2.0.6 — local source/output engineering QA report
+
+Once a selected audio file has been processed, click **生成原音／輸出技術驗收報告 JSON** in the waveform/A-B section. The app reads both full files offline, computes their SHA-256 hashes, checks sample rate, channel count, exact duration difference, PCM subtype, per-channel sample peaks, RMS, clipped and nonfinite samples, and confirms neither file changed during the check. The JSON report is saved under the selected output folder using staging and non-overwriting publication. Differences in rate/channel/duration are warnings, not automatic failures, because they may be deliberate exports. A PASS only means the file is technically readable and stable; it **does not measure true peak, LUFS, AI artifacts or listening quality.** It never transmits audio.
