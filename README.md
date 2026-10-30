@@ -166,3 +166,7 @@ Omitting `--module` installs the original full set for backwards compatibility, 
 ## V2.0.1 — independent optional AI readiness checks
 
 The app's **Environment Check** now reports package presence separately for DeepFilterNet denoise, Demucs separation, Beat This! beat detection, pYIN pitch and WPE dereverb. For neural models, it also verifies that expected local model files exist. The probe runs the optional Python environment with isolated flags and does **not** import PyTorch models, perform inference, install anything or use the network; `ready_for_manual_test` does **not** mean professionally validated. A module that can decode audio with SoundFile may start on WAV/FLAC/AIFF without requiring FFmpeg; other tools and compressed sources still need their respective external codec backends.
+
+## V2.0.2 — Windows packaged AI setup verification
+
+Windows CI now launches **the actual included `setup_ai_windows.bat --list`** inside the finished EXE distribution, validates that all five independent requirement manifests are shipped, and verifies the command does not require or install neural dependencies. The batch script accepts an explicit `APT_PYTHON` environment override, otherwise locates Python 3.11 x64 using the Windows `py` launcher or `python`. It does not install optional packages on application launch.

@@ -84,6 +84,26 @@ jobs:
             throw 'Frozen audio processing checks failed'
           }
           Write-Host 'Frozen WAV 32f, 24-bit resampling and unchanged-source verification passed.'
+      - name: Validate packaged AI module setup without installing AI
+        shell: pwsh
+        run: |
+          Push-Location 'dist/AudioPostToolkit'
+          try {
+            foreach ($module in @('denoise','split','meter','pitch','dereverb')) {
+              if (!(Test-Path ("requirements-ai-modules/" + $module + ".txt"))) {
+                throw "Missing packaged optional module: $module"
+              }
+            }
+            if (!(Test-Path 'scripts/setup_ai_modules.py')) { throw 'Optional module setup script was not bundled' }
+            $listing = cmd /c setup_ai_windows.bat --list | Out-String
+            if ($LASTEXITCODE -ne 0) { throw 'Optional Windows AI setup --list failed' }
+            foreach ($module in @('denoise','split','meter','pitch','dereverb')) {
+              if (!$listing.Contains(('"' + $module + '"'))) { throw "AI setup listing missing $module" }
+            }
+            Write-Host 'Packaged optional AI installer listing passed without installing or downloading models.'
+          } finally {
+            Pop-Location
+          }
       - name: Preserve native diagnostics
         if: always()
         uses: actions/upload-artifact@v4
