@@ -1,1 +1,1 @@
-__version__ = "1.9.6-integrated"
+__version__ = "1.9.7-integrated"

@@ -34,6 +34,7 @@ FONT = "Microsoft JhengHei UI" if os.name == "nt" else "DejaVu Sans"
 # Every tool is an independent operation. None needs other tools to be run first.
 TOOLS = [
     ("轉換與交件", [
+        ("setup", "環境檢查", "檢查本機 FFmpeg、套件與播放設備", "核心功能"),
         ("convert", "音訊轉檔", "無損優先｜批次格式與規格轉換", "核心功能"),
         ("loudscan", "響度分析", "Integrated LUFS · True Peak · LRA", "核心功能"),
         ("normalize", "響度統一", "EBU R128 響度雙階段處理", "核心功能"),
@@ -106,6 +107,7 @@ OPTIONS = {
 }
 
 EXTRA = {
+    "setup": "不需要音檔：檢查 FFmpeg／FFprobe／ffplay、NumPy、SoundFile、聲音裝置與 AI 工作環境，不會安裝套件或上傳資料。缺少 FFmpeg 可執行 setup_ffmpeg_windows.bat 手動安裝。",
     "meter": "使用官方 Beat This! 預訓練模型分析前 3 分鐘的拍點、小節起點與每小節偵測拍數。使用本機模型，不上傳音檔。樂譜拍號仍需人工確認。",
     "pitch": "pYIN 追蹤單人聲或單樂器的基頻、音名及音分，非多聲部扒譜。範圍 50–1200 Hz，最多分析前 10 分鐘；可能有八度誤判。",
     "verify": "比對兩檔的全部解碼樣本，保留原取樣率及各聲道。取樣率或聲道不同會列出差異，不產生誤導性的相減結果。不是聽感評分。",
@@ -395,7 +397,7 @@ class App(BASE_TK):
                 tk.Entry(slot,textvariable=val,bg=SURFACE_2,fg=FG,insertbackground=FG,relief="flat",font=(FONT,11)).pack(fill="x",ipady=8)
         self.fields.columnconfigure(0,weight=1)
         self.fields.columnconfigure(1,weight=1)
-        if tool in ("loudscan","quality","inspect","rhythm","compare","align","silence","verify","pitch"):
+        if tool in ("setup","loudscan","quality","inspect","rhythm","compare","align","silence","verify","pitch"):
             self.fields_label.config(text="分析設定" if rows else "分析工具（不修改原檔）")
         else:
             self.fields_label.config(text="參數設定" if rows else "使用預設專業參數")
@@ -500,19 +502,21 @@ class App(BASE_TK):
     def start(self):
         if self.is_running:
             return
-        if not self.files and self.tool != 'ai_status':
+        if not self.files and self.tool not in ('ai_status', 'setup'):
             messagebox.showinfo("尚未加入音檔","請先新增至少一個音檔。")
             return
+        opts={k:v.get() for k,v in self.option_vars.items()}
+        opts["destination"]=self.destination.get()
         try:
-            # Renaming copies original bytes and never decodes audio; it must
-            # remain usable even when FFmpeg is not installed.
-            if self.tool not in ('ai_status', 'rename'):
+            # Measured mic matching uses SoundFile; pure rename and checks
+            # do not require FFmpeg at all.
+            needs_ffmpeg = (self.tool not in ('ai_status', 'setup', 'rename') and
+                            not (self.tool == 'mic' and opts.get('reference_path')))
+            if needs_ffmpeg:
                 core.require_ffmpeg()
         except core.ToolkitError as e:
             messagebox.showerror("缺少 FFmpeg",str(e))
             return
-        opts={k:v.get() for k,v in self.option_vars.items()}
-        opts["destination"]=self.destination.get()
         tool=self.tool
         if tool in ("compare","align","verify") and len(self.files)!=2:
             messagebox.showinfo("比較音檔","音檔比對請加入剛好 2 個檔案。")
@@ -524,11 +528,17 @@ class App(BASE_TK):
         self.log("—"*42)
         self.log(f"開始｜{TOOL_INFO[tool][0]}｜{len(self.files)} 個檔案")
         files=list(self.files)
-        total=1 if tool=='ai_status' else len(files)
+        total=1 if tool in ('ai_status', 'setup') else len(files)
         def worker():
             succeeded=0
             try:
-                if tool=='ai_status':
+                if tool == 'setup':
+                    import json
+                    from apt.diagnostics import collect
+                    report = collect(check_gui=False)
+                    self.events.put(('log', json.dumps(report, ensure_ascii=False, indent=2)))
+                    succeeded = int(report.get('core_ready', False))
+                elif tool=='ai_status':
                     import json
                     from apt.worker import run_job
                     result=run_job('status', model_dir=opts.get('model_dir'),

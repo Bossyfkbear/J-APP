@@ -127,3 +127,9 @@ If the ChatGPT GitHub connector lacks write permission, use `publish_and_build_w
 The microphone-tone tool now accepts a separate reference recording, ideally the **same voice recorded in the same environment and source position**, at the same sample rate. It calculates a conservative one-third-octave tonal EQ (max ±6 dB; adjustable strength), applies a linear-phase FIR in bounded-size blocks, and exports a 32-bit float WAV with the source's original frame count, sample rate and channel count. It never overwrites original recordings. Without a reference, the earlier experimental U87-inspired EQ preset remains available.
 
 **Not calibrated U87 emulation:** a spectral match does not model microphone noise, polar response, proximity effect or electronics. U87 target measurements have not been supplied. This tool remains a development feature requiring professional listening acceptance.
+
+## V1.9.7 — setup and dependency diagnostics
+
+A new **環境檢查 / Environment Check** module runs *without selecting audio*. It reports the installed FFmpeg, FFprobe, FFplay, NumPy and SoundFile and whether an output device is detected. Windows development releases now include **setup_ffmpeg_windows.bat**, a user-initiated optional installation helper using the Windows Package Manager (`winget install --exact --id Gyan.FFmpeg`). It asks for explicit approval, downloads neither on application launch nor without consent, and does not bundle FFmpeg into the lightweight EXE. Reopen the app after installation so PATH refreshes.
+
+The measured microphone reference-EQ mode uses bundled NumPy/SoundFile and does not require FFmpeg, whereas the fallback U87-inspired EQ uses FFmpeg. No model installation or U87 calibration is implied by successful diagnostics.

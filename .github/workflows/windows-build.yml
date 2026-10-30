@@ -63,6 +63,7 @@ jobs:
           $app = 'dist/AudioPostToolkit/AudioPostToolkit.exe'
           $path = 'dist/AudioPostToolkit/native-diagnostics.json'
           if (!(Test-Path $app) -or !(Test-Path $path)) { throw 'Windows build or diagnostic missing' }
+          if (!(Test-Path 'dist/AudioPostToolkit/setup_ffmpeg_windows.bat')) { throw 'Optional FFmpeg setup helper missing' }
           $report = Get-Content $path -Raw | ConvertFrom-Json
           if (!$report.frozen -or !$report.gui.ok -or $report.gui.tool_panels -lt 1) {
             throw 'Frozen GUI initialization did not pass'

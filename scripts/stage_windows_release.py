@@ -21,6 +21,7 @@ def stage(destination):
     (destination / 'scripts').mkdir(exist_ok=True)
     shutil.copy2(root / 'scripts' / 'download_models.py', destination / 'scripts' / 'download_models.py')
     for name in ('requirements-ai-windows.txt', 'requirements.txt', 'setup_ai_windows.bat',
+                 'setup_ffmpeg_windows.bat',
                  'README.md', 'THIRD_PARTY_NOTICES.md', 'INTEGRATION_STATUS.md',
                  'WINDOWS_BUILD.md', 'AI_COMPATIBILITY.md', 'REUSE_POLICY.md'):
         shutil.copy2(root / name, destination / name)
