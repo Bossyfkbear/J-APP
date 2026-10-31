@@ -28,4 +28,4 @@ def test_all_unknown_does_not_crash():
 def test_explicit_meter_only_when_available():
     result=format_summary({'tempo':{'bpm':60},'key':{'key':'F# minor'},
                            'meter':{'time_signature':'3/4'}})
-    assert summary_lines(result)=='BPM: 60\\n拍號: 3/4\\n調性: F# 小調'
+    assert summary_lines(result)=='BPM: 60\n拍號: 3/4\n調性: F# 小調'

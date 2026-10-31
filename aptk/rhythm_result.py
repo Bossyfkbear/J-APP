@@ -40,4 +40,4 @@ def format_summary(estimate: dict) -> dict[str, str]:
 
 
 def summary_lines(summary: dict) -> str:
-    return "\\n".join(f"{label}: {summary[label]}" for label in ("BPM", "拍號", "調性"))
+    return "\n".join(f"{label}: {summary[label]}" for label in ("BPM", "拍號", "調性"))
