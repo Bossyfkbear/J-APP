@@ -111,6 +111,31 @@ jobs:
           } finally {
             Pop-Location
           }
+      - name: Validate packaged optional AI through the real Windows distribution
+        shell: pwsh
+        timeout-minutes: 18
+        run: |
+          Push-Location 'dist/AudioPostToolkit'
+          try {
+            $env:APT_PYTHON = (Get-Command python).Source
+            # Only install librosa/pYIN in an independent venv, then run
+            # the EXACT .bat workflow the user will launch from this EXE folder.
+            cmd /c setup_ai_windows.bat --module pitch
+            if ($LASTEXITCODE -ne 0) { throw 'Packaged optional pitch install failed' }
+            cmd /c verify_ai_windows.bat --module pitch --report native-pitch-inference.json
+            if ($LASTEXITCODE -ne 0) { throw 'Packaged optional pitch inference failed' }
+            $p = Get-Content native-pitch-inference.json -Raw -Encoding UTF8 | ConvertFrom-Json
+            $hz = [double]$p.measurements.median_voiced_hz
+            if (!$p.real_model_inference -or !$p.source_sha256_unchanged -or $hz -lt 205 -or $hz -gt 235) {
+              throw 'Packaged optional inference report did not meet 220Hz reference'
+            }
+            Write-Host "Frozen distribution external-worker pitch verification passed (measured $hz Hz)"
+          } finally {
+            # The optional Python packages are NOT bundled in the lightweight
+            # main release. The user installs only the modules they select.
+            if (Test-Path '.apt-ai') { Remove-Item '.apt-ai' -Recurse -Force }
+            Pop-Location
+          }
       - name: Preserve native diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -119,6 +144,7 @@ jobs:
           path: |
             dist/AudioPostToolkit/native-diagnostics.json
             dist/AudioPostToolkit/native-audio-smoke.json
+            dist/AudioPostToolkit/native-pitch-inference.json
           if-no-files-found: warn
       - name: Package development build
         shell: pwsh
