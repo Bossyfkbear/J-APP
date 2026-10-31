@@ -221,17 +221,25 @@ def run_output(src: Path, suffix: str, opts: dict, *, filters: str = "", fmt: st
     return out
 
 
+def source_pcm_depth(src: Path) -> str:
+    """Retain source PCM integer/floating-point precision when known."""
+    s = probe(src)['streams'][0]
+    codec = s.get('codec_name', '')
+    try:
+        bits = int(s.get('bits_per_raw_sample') or s.get('bits_per_sample') or 0)
+    except (ValueError, TypeError):
+        bits = 0
+    if codec.startswith('pcm_f64'): return '64f'
+    if codec.startswith('pcm_f32'): return '32f'
+    if bits in (8,16,24,32): return str(bits)
+    return '24'
+
+
 def convert(src: Path, opts: dict) -> Path:
     fmt = opts.get("fmt", "wav")
     depth = opts.get("depth", "auto")
     if depth == 'auto':
-        stream = probe(src)['streams'][0]
-        codec = stream.get('codec_name', '')
-        bits = int(stream.get('bits_per_raw_sample') or stream.get('bits_per_sample') or 0)
-        if codec.startswith('pcm_f64'): depth = '64f'
-        elif codec.startswith('pcm_f32'): depth = '32f'
-        elif bits in (8,16,24,32): depth = str(bits)
-        else: depth = '24'
+        depth = source_pcm_depth(src)
     rate = opts.get("rate", "保留")
     channels = opts.get("channels", "保留")
     if fmt == "flac" and depth in ("32f", "64f", "32"):
@@ -244,17 +252,7 @@ def convert(src: Path, opts: dict) -> Path:
 def process_filter(src: Path, opts: dict, filter_expression: str, suffix: str) -> Path:
     depth = opts.get("depth", "24")
     if depth == "auto":
-        stream = probe(src)["streams"][0]
-        codec = stream.get("codec_name", "")
-        bits = int(stream.get("bits_per_raw_sample") or stream.get("bits_per_sample") or 0)
-        if codec.startswith("pcm_f64"):
-            depth = "64f"
-        elif codec.startswith("pcm_f32"):
-            depth = "32f"
-        elif bits in (8, 16, 24, 32):
-            depth = str(bits)
-        else:
-            depth = "24"
+        depth = source_pcm_depth(src)
     return run_output(src, suffix, opts, filters=filter_expression, depth=depth)
 
 
@@ -295,7 +293,10 @@ def normalize(src: Path, opts: dict) -> Path:
           f"measured_TP={measurements['input_tp']}:"
           f"measured_thresh={measurements['input_thresh']}:"
           f"offset={measurements['target_offset']}:linear=true:print_format=summary")
-    out = run_output(src, "_loudnorm", opts, filters=af, rate=str(rate))
+    depth = opts.get("depth", "auto")
+    if depth == "auto":
+        depth = source_pcm_depth(src)
+    out = run_output(src, "_loudnorm", opts, filters=af, rate=str(rate), depth=depth)
     return out
 
 

@@ -243,3 +243,7 @@ On the **Environment Check** panel, choose the desired AI module and click **安
 ### Frozen Windows DLL isolation for optional AI
 
 The integrated AI installer and model self-test now launch external Python with the PyInstaller-modified DLL search directory temporarily cleared and restored. This prevents the frozen desktop EXE from contaminating third-party scientific-library DLL resolution in the optional venv. The core app still does not bundle optional AI weights.
+
+## V2.2.2: mastering-preserving loudness export
+
+Two-pass loudness normalization now defaults to preserving the source's known PCM sample precision, including 32-bit float and 64-bit float, instead of silently exporting 24-bit PCM. Stereo channel count and source sample rate remain unchanged, and the panel offers explicit depth overrides. Regression tests verify float32 and 24-bit stereo with unchanged source SHA-256.
