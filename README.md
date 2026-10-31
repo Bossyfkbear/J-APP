@@ -223,3 +223,7 @@ Open **環境檢查** and select one installed module (denoise, split, meter, pi
 ## Real Windows optional DSP acceptance
 
 A separate GitHub Actions workflow [Windows real optional DSP acceptance](https://github.com/Bossyfkbear/J-APP/actions/workflows/windows-optional-dsp.yml) runs **real** (not mocked) pYIN and NARA-WPE processing on deterministic synthetic stereo audio under Windows Python 3.11. Pitch must recover 220Hz within ±15Hz, dereverb must preserve stereo frame count, and the original SHA256 must be unchanged. The workflow attaches JSON proof. This does **not** establish neural pretrained DeepFilterNet/Demucs/Beat This! acceptance, studio DAC playback, or human listening quality.
+
+## Optional full neural checkpoint acceptance on Windows
+
+The separate [Windows real pretrained audio-model acceptance](https://github.com/Bossyfkbear/J-APP/actions/workflows/windows-pretrained-acceptance.yml) matrix runs three independent Windows jobs: DeepFilterNet denoise, Demucs separation and Beat This! tempo/beat tracking. Each installs only its own pinned CPU environment, downloads its explicitly selected official pretrained checkpoint with a fixed SHA-256, and invokes the actual worker on 8 seconds of synthetic audio, retaining JSON evidence. It does not use private recordings. This costly integration test is separate from the lightweight core EXE workflow and **must pass before native pretrained model acceptance can be claimed**. Even a PASS does not substitute professional listening QA or calibrated U87 microphone testing.

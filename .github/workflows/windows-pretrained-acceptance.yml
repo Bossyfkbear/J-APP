@@ -1,0 +1,69 @@
+name: Windows real pretrained audio-model acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-pretrained-acceptance.yml'
+      - 'apt/models.py'
+      - 'apt/demucs_adapter.py'
+      - 'apt/meter.py'
+      - 'scripts/download_models.py'
+      - 'scripts/verify_optional_ai.py'
+      - 'requirements-ai-modules/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  official-model:
+    runs-on: windows-2022
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: denoise
+            model: DeepFilterNet3
+          - module: split
+            model: Demucs
+          - module: meter
+            model: BeatThis
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - name: Install only selected neural module pinned CPU dependencies
+        shell: pwsh
+        timeout-minutes: 18
+        run: |
+          python -m pip install --disable-pip-version-check -r "requirements-ai-modules/${{ matrix.module }}.txt" -r requirements.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Neural module install failed' }
+          python -m pip check
+          if ($LASTEXITCODE -ne 0) { throw 'Neural module dependency mismatch' }
+      - name: Download and SHA256-check official pretrained weights
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          python scripts/download_models.py --directory models --model ${{ matrix.model }}
+          if ($LASTEXITCODE -ne 0) { throw 'Official model download or SHA256 verification failed' }
+      - name: Real model CPU inference on deterministic offline synthetic audio
+        shell: pwsh
+        timeout-minutes: 20
+        run: |
+          $path = "windows-${{ matrix.module }}-real-model.json"
+          python scripts/verify_optional_ai.py --module ${{ matrix.module }} --report $path
+          if ($LASTEXITCODE -ne 0) { throw 'Actual pretrained model inference failed' }
+          $r = Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ($r.status -ne 'pass' -or !$r.real_model_inference -or !$r.source_sha256_unchanged -or !$r.downloaded_model -eq $false) {
+            throw 'Neural model proof report invalid'
+          }
+          Write-Host 'Official model performed real inference, user audio unchanged'
+      - name: Publish machine-readable model evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-real-${{ matrix.module }}-evidence
+          path: windows-${{ matrix.module }}-real-model.json
+          if-no-files-found: warn
+          retention-days: 90
