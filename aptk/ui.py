@@ -415,6 +415,7 @@ class App(BASE_TK):
             slot.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0,10))
             self.text(slot, '實機聲音輸出（需自行確認有聽到）', size=10, color=SECONDARY).pack(anchor='w', pady=(0,5))
             self.button(slot, '▶ 播放 1 秒低音量測試音', self.test_output_device).pack(anchor='w')
+            self.button(slot, '安裝／修復 FFmpeg（Windows）', self.install_ffmpeg_windows).pack(anchor='w',pady=(6,0))
             ai = tk.Frame(self.fields, bg=BG)
             ai.grid(row=1,column=0,columnspan=2,sticky='ew',pady=(8,10))
             self.text(ai,'已安裝 AI 模組：本機實際運算自測（不使用私人錄音）',
@@ -677,6 +678,26 @@ class App(BASE_TK):
                 pass
         if proc.poll() is None:
             proc.terminate()
+
+    def install_ffmpeg_windows(self):
+        """Open the shipped interactive installer; never download on startup."""
+        if os.name != 'nt':
+            messagebox.showinfo('FFmpeg', '此安裝工具僅適用於 Windows。')
+            return
+        from apt.worker import app_directory
+        batch=app_directory() / 'setup_ffmpeg_windows.bat'
+        if not batch.is_file():
+            messagebox.showerror('FFmpeg', f'找不到安裝工具：{batch}')
+            return
+        if not messagebox.askyesno('安裝／修復 FFmpeg',
+                '將開啟 Windows 命令視窗，並在視窗中再次要求確認安裝 FFmpeg。'
+                '安裝後請重新開啟 Audio Post Toolkit。是否繼續？'):
+            return
+        try:
+            os.startfile(str(batch))
+            self.log('已開啟 FFmpeg 選裝工具；安裝完成後請重新啟動軟體。')
+        except OSError as exc:
+            messagebox.showerror('FFmpeg', str(exc))
 
     def install_selected_ai(self):
         if self.is_running or self.ai_install_running or self.ai_verify_running:

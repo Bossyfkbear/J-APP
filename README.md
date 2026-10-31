@@ -247,3 +247,7 @@ The integrated AI installer and model self-test now launch external Python with 
 ## V2.2.2: mastering-preserving loudness export
 
 Two-pass loudness normalization now defaults to preserving the source's known PCM sample precision, including 32-bit float and 64-bit float, instead of silently exporting 24-bit PCM. Stereo channel count and source sample rate remain unchanged, and the panel offers explicit depth overrides. Regression tests verify float32 and 24-bit stereo with unchanged source SHA-256.
+
+## One-click FFmpeg setup
+
+The Environment Check panel includes **安裝／修復 FFmpeg（Windows）**. It opens the included interactive `setup_ffmpeg_windows.bat` and requires explicit user consent for any winget installation. This keeps external FFmpeg binaries out of the lightweight core ZIP and avoids silent downloads on startup.
