@@ -84,8 +84,18 @@ def verify_result(module, result, destination):
         return {'stems':details}
     if not isinstance(result,dict):
         raise RuntimeError('Analysis model returned non-dictionary result')
-    if module=='pitch' and not result:
-        raise RuntimeError('Pitch model returned empty result')
+    if module == 'pitch':
+        median = result.get('median_voiced_hz')
+        frames = result.get('frames')
+        if not isinstance(frames, list) or not frames or not isinstance(median, (int, float)):
+            raise RuntimeError('pYIN returned no usable pitch estimate')
+        if not math.isfinite(median) or not 205 <= median <= 235:
+            raise RuntimeError(f'220Hz reference median outside 205–235Hz: {median!r}')
+        voiced_count = sum(isinstance(f, dict) and f.get('hz') is not None for f in frames)
+        if voiced_count < 300:
+            raise RuntimeError(f'Too few voiced frames in reference: {voiced_count}')
+        return {'median_voiced_hz':median,'voiced_frames':voiced_count,
+                'total_frames':len(frames),'expected_reference_hz':220}
     if module=='meter' and not isinstance(result.get('beat_seconds'),list):
         raise RuntimeError('Beat model did not produce beat timeline')
     return {'result_keys':sorted(result.keys())}
@@ -106,7 +116,8 @@ def run(module, root=ROOT):
         source=synthetic_source(directory/'synthetic_input.wav')
         checksum=digest(source)
         dest=directory/('stems' if module=='split' else 'output.wav')
-        kwargs={'model_dir':str(model) if model else None}
+        kwargs={'model_dir':str(model) if model else None,
+                'runtime_python':sys.executable}
         if module not in ('pitch','meter'):
             kwargs['destination']=str(dest)
         started=time.monotonic()

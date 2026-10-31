@@ -1,0 +1,58 @@
+name: Windows real optional DSP acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-optional-dsp.yml'
+      - 'apt/**'
+      - 'aptk/**'
+      - 'scripts/verify_optional_ai.py'
+      - 'requirements-ai-modules/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  actual-inference:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [pitch, dereverb]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - name: Install pinned CPU dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check -r "requirements-ai-modules/${{ matrix.module }}.txt" -r requirements.txt
+          python -m pip check
+      - name: Actual offline inference on eight-second synthetic audio
+        shell: pwsh
+        timeout-minutes: 18
+        run: |
+          $path = "windows-${{ matrix.module }}-inference.json"
+          python scripts/verify_optional_ai.py --module ${{ matrix.module }} --report $path
+          if ($LASTEXITCODE -ne 0) { throw "Actual Windows module inference failed" }
+          $report = Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ($report.status -ne 'pass' -or !$report.real_model_inference -or !$report.source_sha256_unchanged) { throw "Incomplete proof" }
+          if ($report.module -eq 'pitch') {
+            if ([double]$report.measurements.median_voiced_hz -lt 205 -or [double]$report.measurements.median_voiced_hz -gt 235) {
+              throw 'Pitch detection outside 220Hz reference tolerance'
+            }
+          }
+          if ($report.module -eq 'dereverb') {
+            if ($report.measurements.frames -ne 384000 -or $report.measurements.channels -ne 2) { throw 'WPE stereo length changed' }
+          }
+          Write-Host "Verified ${{ matrix.module }} on real Windows CPU runtime"
+      - name: Preserve evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.module }}-inference
+          path: windows-${{ matrix.module }}-inference.json
+          if-no-files-found: warn
+          retention-days: 90

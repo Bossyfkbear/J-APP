@@ -219,3 +219,7 @@ The CLI's technical-acceptance test explicitly reads UTF-8 JSON, independent of 
 ## V2.1.0 — run actual installed AI model self-test inside the GUI
 
 Open **環境檢查** and select one installed module (denoise, split, meter, pitch or dereverb), then click **執行所選模型推論自測**. The app requests permission before launching the optional external Python environment and the V2.0.8 real-inference script. It operates on synthetic audio only, performs no package/model download, and shows the success/error details in the process log. You may cancel the subprocess from the app. The 15-minute safety timeout prevents indefinite CPU inference. A PASS is only evidence of this local model processing a short synthetic fixture, not proof of professional listening quality or U87 microphone modelling.
+
+## Real Windows optional DSP acceptance
+
+A separate GitHub Actions workflow [Windows real optional DSP acceptance](https://github.com/Bossyfkbear/J-APP/actions/workflows/windows-optional-dsp.yml) runs **real** (not mocked) pYIN and NARA-WPE processing on deterministic synthetic stereo audio under Windows Python 3.11. Pitch must recover 220Hz within ±15Hz, dereverb must preserve stereo frame count, and the original SHA256 must be unchanged. The workflow attaches JSON proof. This does **not** establish neural pretrained DeepFilterNet/Demucs/Beat This! acceptance, studio DAC playback, or human listening quality.
