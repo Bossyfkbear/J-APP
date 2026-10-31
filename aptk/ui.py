@@ -68,6 +68,8 @@ TOOLS = [
     ]),
 ]
 TOOL_INFO = {k:(title,desc,tag) for _, sect in TOOLS for k,title,desc,tag in sect}
+TOOL_CATEGORY = {k:group for group,entries in TOOLS for k,_,_,_ in entries}
+CATEGORY_TOOLS = {group:tuple(k for k,_,_,_ in entries) for group,entries in TOOLS}
 
 OPTIONS = {
     "meter": [("model_dir","Beat This! 模型資料夾", "folder", [], ""),
@@ -156,6 +158,8 @@ class App(BASE_TK):
         self.minsize(970, 640)
         self.configure(bg=BG)
         self.tool = "convert"
+        self.category = TOOL_CATEGORY[self.tool]
+        self.category_last_tool = {}
         self.files: list[Path] = []
         self.option_vars: dict[str,tk.StringVar] = {}
         self.saved_options = {}
@@ -234,19 +238,22 @@ class App(BASE_TK):
         navc.create_window((0,0),window=navinner,anchor="nw")
         navinner.bind("<Configure>",lambda e:navc.configure(scrollregion=navc.bbox("all")))
         self.navbuttons={}
-        for sect, entries in TOOLS:
-            self.text(navinner,sect.upper(),size=9,color=SECONDARY,bg=NAV).pack(anchor="w",padx=24,pady=(18,6))
-            for key,label,description,tag in entries:
-                btn=tk.Button(navinner,text="  "+label,anchor="w",command=lambda t=key:self.select_tool(t),
-                              font=(FONT,10),relief="flat",bd=0,bg=NAV,fg="#B7C5D0",activebackground=SURFACE_2,
-                              activeforeground=ACCENT,padx=18,pady=8,width=22,cursor="hand2",highlightthickness=0)
-                btn.pack(fill="x",padx=(8,8))
-                self.navbuttons[key]=btn
+        # Top-level sidebar contains ONLY major groups. Individual tools live
+        # together in the main category workspace, without 25 nav entries.
+        self.text(navinner,"功能分類",size=10,color=SECONDARY,bg=NAV).pack(anchor="w",padx=24,pady=(20,8))
+        for group,entries in TOOLS:
+            btn=tk.Button(navinner,text=f"  {group}   ({len(entries)})",anchor="w",
+                          command=lambda cat=group:self.select_category(cat),
+                          font=(FONT,11,"bold"),relief="flat",bd=0,bg=NAV,fg="#B7C5D0",
+                          activebackground=SURFACE_2,activeforeground=ACCENT,
+                          padx=18,pady=13,width=22,cursor="hand2",highlightthickness=0)
+            btn.pack(fill="x",padx=(8,8),pady=(1,5))
+            self.navbuttons[group]=btn
         self.text(self.sidebar,"v"+__version__+"  ·  輕量開發版",size=9,color=SECONDARY,bg=NAV).pack(side="bottom",anchor="w",padx=24,pady=17)
         self.content=tk.Frame(root,bg=BG)
         self.content.pack(side="left",fill="both",expand=True,padx=27,pady=23)
         self._build_content()
-        self.select_tool("convert")
+        self.select_category("轉換與交件")
 
     def _build_content(self):
         title_row=tk.Frame(self.content,bg=BG)
@@ -270,6 +277,19 @@ class App(BASE_TK):
         self.editor_canvas.bind("<Configure>",lambda e:self.editor_canvas.itemconfigure(self.editor_window,width=e.width))
         self.editor_canvas.bind("<Enter>",lambda e:self.editor_canvas.bind_all("<MouseWheel>",self._wheel))
         self.editor_canvas.bind("<Leave>",lambda e:self.editor_canvas.unbind_all("<MouseWheel>"))
+
+        self.group_card=tk.Frame(self.editor,bg=SURFACE,highlightbackground=BORDER,highlightthickness=1)
+        self.group_card.pack(fill="x",pady=(0,13))
+        group_header=tk.Frame(self.group_card,bg=SURFACE)
+        group_header.pack(fill="x",padx=16,pady=(12,3))
+        self.text(group_header,"分類功能",size=10,bold=True,bg=SURFACE).pack(side="left")
+        self.category_count=self.text(group_header,"",size=9,color=SECONDARY,bg=SURFACE)
+        self.category_count.pack(side="right")
+        self.group_tools=tk.Frame(self.group_card,bg=SURFACE)
+        self.group_tools.pack(fill="x",padx=12,pady=(4,12))
+        for i in range(3):
+            self.group_tools.columnconfigure(i,weight=1,uniform="category_tools")
+        self.toolbuttons={}
 
         self.file_card=tk.Frame(self.editor,bg=SURFACE,highlightbackground=BORDER,highlightthickness=1)
         self.file_card.pack(fill="x",pady=(0,13))
@@ -366,18 +386,49 @@ class App(BASE_TK):
     def _wheel(self,event):
         self.editor_canvas.yview_scroll(-int(event.delta/120),"units")
 
+    def select_category(self, category: str):
+        """Open one combined workspace for a major category."""
+        if self.is_running or category not in CATEGORY_TOOLS:
+            return
+        tool = self.tool if TOOL_CATEGORY[self.tool] == category else (
+            self.category_last_tool.get(category) or CATEGORY_TOOLS[category][0])
+        self.select_tool(tool)
+
     def select_tool(self, tool: str):
-        if self.is_running:
+        if self.is_running or tool not in TOOL_INFO:
             return
         self.saved_options[self.tool] = {key: var.get() for key, var in self.option_vars.items()}
         self.tool=tool
+        self.category=TOOL_CATEGORY[tool]
+        self.category_last_tool[self.category]=tool
         title, desc, tag=TOOL_INFO[tool]
-        self.title_label.config(text=title)
-        self.subtitle.config(text=desc)
+        self.title_label.config(text=self.category)
+        self.subtitle.config(text=f"{title}｜{desc}")
         self.tag_label.config(text=tag)
-        self.helper.config(text=EXTRA[tool])
-        for k,b in self.navbuttons.items():
-            b.config(bg="#243C48" if k==tool else NAV,fg=ACCENT if k==tool else "#B7C5D0")
+        self.helper.config(text=EXTRA.get(tool,""))
+        for group,btn in self.navbuttons.items():
+            active = group == self.category
+            btn.config(bg="#243C48" if active else NAV,
+                       fg=ACCENT if active else "#B7C5D0")
+        # All tools in this category appear within ONE panel. Switching
+        # tools keeps the source file list, output folder and saved parameters.
+        for child in self.group_tools.winfo_children():
+            child.destroy()
+        self.toolbuttons={}
+        members=CATEGORY_TOOLS[self.category]
+        self.category_count.config(text=f"{len(members)} 項功能")
+        for i,key in enumerate(members):
+            name=TOOL_INFO[key][0]
+            active=key==tool
+            button=tk.Button(self.group_tools,text=name,command=lambda t=key:self.select_tool(t),
+                             font=(FONT,10,"bold" if active else "normal"),
+                             bg=ACCENT if active else SURFACE_2,
+                             fg="#0A1A22" if active else FG,
+                             activebackground="#8BEAF2" if active else "#354557",
+                             activeforeground="#0A1A22" if active else FG,
+                             relief="flat",bd=0,padx=8,pady=11,cursor="hand2",highlightthickness=0)
+            button.grid(row=i//3,column=i%3,sticky="ew",padx=4,pady=4)
+            self.toolbuttons[key]=button
         for widget in self.fields.winfo_children():
             widget.destroy()
         self.option_vars={}

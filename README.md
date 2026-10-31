@@ -259,3 +259,7 @@ Selecting **BPM／調性** and clicking **開始處理** now opens a single comp
 ## V2.3.2 — results-first desktop workflow
 
 All 25 audio tool panels now return a concise, readable **完成結果** popup: processing tools show the output file or folder; analysis tools show values, timestamps or comparison summaries; rhythm shows only BPM, time signature and key; setup shows which core/AI modules are ready. Batched files are consolidated into one bounded summary rather than flooding dialogs. Technical machine-readable reports may still be saved behind the scenes for auditing, but no raw JSON, FFmpeg command lines or Python traceback appears in the normal GUI. The previous PROCESS LOG panel is hidden by default, retaining an internal diagnostic buffer. Errors are summarized in plain language and the original source files stay unchanged.
+
+## V2.3.3 — four integrated category workspaces
+
+The desktop sidebar is now consolidated into **four major categories** only: **轉換與交件**, **修復**, **音樂與 AI**, and **音色與檔案**. Choosing a category opens one integrated workspace with its tools in a compact grid at the top. For example, **修復** includes WPE dereverb, noise residual, declick, declip and de-ess, while **音樂與 AI** includes neural denoise/separation, BPM/key, beat tracking, pitch and chord/progression analysis. Moving between a category's tools retains selected source files, output folder and per-tool settings, and each action still provides only a concise user-readable result popup rather than raw logs. All 25 existing independent processing functions remain in place.
