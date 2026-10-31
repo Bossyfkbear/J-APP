@@ -126,7 +126,7 @@ EXTRA = {
     "silence": "只標記靜音區段，不切檔，也不刪除任何音訊。",
     "ai_denoise": "需本機 DeepFilterNet 模型與相容環境。內部使用 48 kHz，輸出還原來源取樣率、聲道及已知 PCM 精度；有損來源輸出 24-bit WAV。不會恢復模型頻寬外的細節。",
     "split": "需另外安裝 Demucs 並選取本機模型資料夾。模式 vocal：人聲與伴奏；four：人聲、鼓、貝斯、其他。",
-    "rhythm": "使用 NumPy / SoundFile 分析。BPM 與 Key 為推估結果；拍號尚無可靠模型，不提供虛假結果。",
+    "rhythm": "按「開始處理」後，分析完成即彈出 BPM、拍號、調性。只顯示結果，不輸出 JSON 或計算過程。",
     "mic": "提供同聲源、同環境、相同取樣率的目標麥克風 WAV/FLAC/AIFF，進行保守 EQ 匹配（最多 ±6 dB，輸出 32f WAV）；不會模擬 U87 的指向性、瞬態或電子特性。不選參考檔則保留原本的 U87 風格 EQ 草案。",
     "rename": "安全複製新檔名，不搬動或覆蓋原始音檔。",
     "chords": "和弦估計可能受複雜混音影響。",
@@ -562,8 +562,9 @@ class App(BASE_TK):
         core.CANCEL.clear()
         self.runbtn.configure(state="disabled",bg="#3B5260")
         self.state_label.config(text="處理中…",fg=ACCENT)
-        self.log("—"*42)
-        self.log(f"開始｜{TOOL_INFO[tool][0]}｜{len(self.files)} 個檔案")
+        if tool != 'rhythm':
+            self.log("—"*42)
+            self.log(f"開始｜{TOOL_INFO[tool][0]}｜{len(self.files)} 個檔案")
         files=list(self.files)
         total=1 if tool in ('ai_status', 'setup') else len(files)
         def worker():
@@ -582,6 +583,21 @@ class App(BASE_TK):
                                    runtime_python=opts.get('runtime_python'), cancelled=core.CANCEL.is_set)
                     self.events.put(('log',json.dumps(result,ensure_ascii=False,indent=2)))
                     succeeded=int(result.get('ready',False))
+                elif tool=="rhythm":
+                    import json
+                    from .rhythm_result import format_summary
+                    summaries=[]
+                    for file in files:
+                        if core.CANCEL.is_set():
+                            break
+                        try:
+                            raw=json.loads(core.estimate_bpm_key(file))
+                            summaries.append((file.name,format_summary(raw)))
+                            succeeded+=1
+                        except Exception as exc:
+                            self.events.put(("rhythm_error", file.name, f"{type(exc).__name__}: {exc}"))
+                    if summaries:
+                        self.events.put(("rhythm_results", summaries))
                 elif tool=="rename":
                     results=core.copy_renamed(files,opts,lambda x:self.events.put(("log",x)))
                     succeeded=len(results)
@@ -825,6 +841,17 @@ class App(BASE_TK):
                         except Exception as exc:
                             self.stop_preview()
                             self.log(f'A/B 無法播放：{exc}')
+                elif event[0]=='rhythm_results':
+                    from .rhythm_result import summary_lines
+                    results=event[1]
+                    if len(results)==1:
+                        messagebox.showinfo('BPM／調性', summary_lines(results[0][1]))
+                    else:
+                        messagebox.showinfo('BPM／調性',
+                            '\n\n'.join(f'{name}\n{summary_lines(info)}' for name,info in results))
+                elif event[0]=='rhythm_error':
+                    _,name,error=event
+                    messagebox.showerror('BPM／調性', f'{name}\n無法分析：{error}')
                 elif event[0]=='ai_install_result':
                     _,module,success,detail=event
                     self.ai_install_running=False
@@ -886,7 +913,8 @@ class App(BASE_TK):
                     self.is_running=False
                     self.runbtn.configure(state="normal",bg=ACCENT)
                     self.state_label.config(text="已取消" if cancelled else f"完成 {n}/{total}",fg=WARNING if cancelled or n<total else GOOD)
-                    self.log(f"工作結束｜成功 {n}/{total}"+("｜使用者取消" if cancelled else ""))
+                    if self.tool != 'rhythm':
+                        self.log(f"工作結束｜成功 {n}/{total}"+("｜使用者取消" if cancelled else ""))
         except queue.Empty:
             pass
         self.after(100,self._drain_events)

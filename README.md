@@ -251,3 +251,7 @@ Two-pass loudness normalization now defaults to preserving the source's known PC
 ## One-click FFmpeg setup
 
 The Environment Check panel includes **安裝／修復 FFmpeg（Windows）**. It opens the included interactive `setup_ffmpeg_windows.bat` and requires explicit user consent for any winget installation. This keeps external FFmpeg binaries out of the lightweight core ZIP and avoids silent downloads on startup.
+
+## BPM / key: results-only popup (V2.3.1)
+
+Selecting **BPM／調性** and clicking **開始處理** now opens a single compact result popup containing only `BPM:`, `拍號:`, and `調性:` after the audio has been analyzed. The GUI no longer dumps analysis JSON or creates a text report for this operation. The time signature is shown as **無法判定** when it cannot be reliably detected, rather than fabricating 4/4; the separately installed Beat This! model provides its own beat/downbeat tool. Multi-file jobs show one grouped result popup with each filename.
