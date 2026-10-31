@@ -38,3 +38,23 @@ def install_command(root, module, *, download_models=False, platform=None):
     if download_models:
         argv.append("--with-models")
     return argv
+
+
+def external_popen(args, **kwargs):
+    """Launch external Python/cmd without frozen PyInstaller DLL-path pollution.
+
+    The running Windows EXE changes the process DLL search path; that inherited
+    path can make torch, scipy and venv python fail to load native DLLs.
+    Restore the host interpreter's DLL directory only around child creation.
+    """
+    import subprocess
+    import sys
+    if os.name == 'nt' and getattr(sys, 'frozen', False):
+        import ctypes
+        kernel = ctypes.windll.kernel32
+        kernel.SetDllDirectoryW(None)
+        try:
+            return subprocess.Popen(args, **kwargs)
+        finally:
+            kernel.SetDllDirectoryW(str(sys._MEIPASS))
+    return subprocess.Popen(args, **kwargs)

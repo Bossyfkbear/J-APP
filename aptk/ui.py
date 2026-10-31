@@ -645,7 +645,8 @@ class App(BASE_TK):
             try:
                 flags={'creationflags':getattr(subprocess,'CREATE_NO_WINDOW',0)} if os.name=='nt' else {}
                 env=dict(os.environ,PYTHONIOENCODING='utf-8',PYTHONUTF8='1')
-                proc=subprocess.Popen([str(interpreter),str(script),'--module',chosen],
+                from .ai_control import external_popen
+                proc=external_popen([str(interpreter),str(script),'--module',chosen],
                     cwd=str(root),stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,text=True,encoding='utf-8',errors='replace',
                     env=env,**flags)
@@ -707,7 +708,8 @@ class App(BASE_TK):
                 with tempfile.TemporaryDirectory(prefix='.apt_ai_gui_') as directory:
                     logfile = Path(directory) / 'install.log'
                     with logfile.open('wb') as log:
-                        proc = subprocess.Popen(
+                        from .ai_control import external_popen
+                        proc = external_popen(
                             args, cwd=str(root), stdin=subprocess.DEVNULL,
                             stdout=log, stderr=subprocess.STDOUT,
                             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))

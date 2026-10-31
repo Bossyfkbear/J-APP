@@ -41,3 +41,15 @@ def test_installer_rejects_unknown_and_spurious_downloads(tmp_path):
         install_command(tmp_path,'denoise',platform='posix')
     with pytest.raises(FileNotFoundError):
         install_command(tmp_path/'missing','denoise',platform='nt')
+
+
+def test_external_process_launches_without_mutating_parent():
+    import sys
+    from aptk.ai_control import external_popen
+    import subprocess
+    proc=external_popen(
+        [sys.executable,'-c','import sys;print(sys.version_info.major)'],
+        stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    data,err=proc.communicate(timeout=10)
+    assert proc.returncode==0,err
+    assert data.strip()==b'3'

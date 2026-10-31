@@ -239,3 +239,7 @@ The real Beat This! test now checks the **measured tempo** and a nonempty beat t
 ## Windows one-click optional AI setup
 
 On the **Environment Check** panel, choose the desired AI module and click **安裝所選 AI 模組**. Installation requires explicit approval. Only the chosen module is installed in an isolated `.apt-ai` Python 3.11 environment; DeepFilterNet, Demucs and Beat This! also download the requested official SHA256-pinned model (with a disk-space warning). There is a cancellable 30-minute installation limit, and installation results appear in the process log. When installation finishes, the desktop app **automatically discovers** the canonical model folder on the next tool selection; manually selected model folders remain supported. The default core EXE remains small and retains source audio unchanged.
+
+### Frozen Windows DLL isolation for optional AI
+
+The integrated AI installer and model self-test now launch external Python with the PyInstaller-modified DLL search directory temporarily cleared and restored. This prevents the frozen desktop EXE from contaminating third-party scientific-library DLL resolution in the optional venv. The core app still does not bundle optional AI weights.
