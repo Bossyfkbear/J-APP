@@ -107,7 +107,7 @@ OPTIONS = {
 }
 
 EXTRA = {
-    "setup": "不需要音檔：檢查 FFmpeg／FFprobe／ffplay、NumPy、SoundFile、聲音裝置與五個選裝 AI 模組。可手動播放 -30 dBFS 的 1 秒測試音，並自行確認是否聽到。檢查不會安裝套件或上傳資料。缺少 FFmpeg 可執行 setup_ffmpeg_windows.bat。",
+    "setup": "不需要音檔：檢查 FFmpeg、音效設備與五個選裝 AI 模組。可安裝所選 AI 模組，完成後自動使用已安裝的模型路徑；安裝需明確確認。可播放低音量測試音。缺少 FFmpeg 可執行 setup_ffmpeg_windows.bat。",
     "meter": "使用官方 Beat This! 預訓練模型分析前 3 分鐘的拍點、小節起點與每小節偵測拍數。使用本機模型，不上傳音檔。樂譜拍號仍需人工確認。",
     "pitch": "pYIN 追蹤單人聲或單樂器的基頻、音名及音分，非多聲部扒譜。範圍 50–1200 Hz，最多分析前 10 分鐘；可能有八度誤判。",
     "verify": "比對兩檔的全部解碼樣本，保留原取樣率及各聲道。取樣率或聲道不同會列出差異，不產生誤導性的相減結果。不是聽感評分。",
@@ -166,6 +166,8 @@ class App(BASE_TK):
         self.qa_running = False
         self.ai_verify_running = False
         self.ai_verify_process = None
+        self.ai_install_running = False
+        self.ai_install_process = None
         self.ai_test_module = tk.StringVar(value='denoise')
         self.events: queue.Queue = queue.Queue()
         self.preview_process = None
@@ -419,7 +421,8 @@ class App(BASE_TK):
             ttk.Combobox(ai,textvariable=self.ai_test_module,
                          values=['denoise','split','meter','pitch','dereverb'],
                          state='readonly',style='Dark.TCombobox',width=18).pack(side='left')
-            self.button(ai,'執行所選模型推論自測',self.test_installed_ai).pack(side='left',padx=10)
+            self.button(ai,'安裝所選 AI 模組',self.install_selected_ai).pack(side='left',padx=(0,10))
+            self.button(ai,'執行所選模型推論自測',self.test_installed_ai).pack(side='left')
         if tool in ("setup","loudscan","quality","inspect","rhythm","compare","align","silence","verify","pitch"):
             self.fields_label.config(text="分析設定" if rows else "分析工具（不修改原檔）")
         else:
@@ -619,7 +622,7 @@ class App(BASE_TK):
         self.worker_thread.start()
 
     def test_installed_ai(self):
-        if self.is_running or self.ai_verify_running:
+        if self.is_running or self.ai_verify_running or self.ai_install_running:
             return
         from apt.worker import app_directory
         root=app_directory()
@@ -673,6 +676,61 @@ class App(BASE_TK):
         if proc.poll() is None:
             proc.terminate()
 
+    def install_selected_ai(self):
+        if self.is_running or self.ai_install_running or self.ai_verify_running:
+            return
+        from apt.worker import app_directory
+        from .ai_control import install_command, MODELS
+        root = app_directory()
+        module = self.ai_test_module.get()
+        requires_weights = module in MODELS
+        message = (
+            f'即將在獨立 .apt-ai 環境中安裝 {module}。\\n'
+            + ('此功能需要另外下載官方模型與 PyTorch，可能占用數 GB 磁碟。\\n'
+               if requires_weights else '此模組只需獨立安裝相關 Python 套件。\\n')
+            + '不會改動原始音檔，並且不會把 AI 套件塞進主程式。是否開始？'
+        )
+        if not messagebox.askokcancel('安裝選定的 AI 模組', message):
+            return
+        try:
+            args = install_command(root, module, download_models=requires_weights)
+        except (OSError, ValueError, RuntimeError) as exc:
+            messagebox.showerror('AI 安裝工具', str(exc))
+            return
+        self.ai_install_running = True
+        self.log(f'開始安裝 {module}，請保持網路連線；完成後可直接使用此模組。')
+        self.state_label.config(text=f'安裝 {module}…', fg=WARNING)
+        def worker():
+            import tempfile
+            proc = None
+            try:
+                with tempfile.TemporaryDirectory(prefix='.apt_ai_gui_') as directory:
+                    logfile = Path(directory) / 'install.log'
+                    with logfile.open('wb') as log:
+                        proc = subprocess.Popen(
+                            args, cwd=str(root), stdin=subprocess.DEVNULL,
+                            stdout=log, stderr=subprocess.STDOUT,
+                            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+                        self.ai_install_process = proc
+                        try:
+                            proc.wait(timeout=1800)
+                        except subprocess.TimeoutExpired:
+                            self._kill_ai_test(proc)
+                            self.events.put(('ai_install_result', module, False,
+                                             '安裝已達 30 分鐘限制，已停止。'))
+                            return
+                    with logfile.open('rb') as log:
+                        log.seek(max(0, logfile.stat().st_size - 4000))
+                        detail = log.read().decode('utf-8', errors='replace')
+                    success = proc.returncode == 0
+                    self.events.put(('ai_install_result', module, success, detail))
+            except Exception as exc:
+                self.events.put(('ai_install_result', module, False,
+                                 f'{type(exc).__name__}: {exc}'))
+            finally:
+                self.ai_install_process = None
+        threading.Thread(target=worker, daemon=True).start()
+
     def start_technical_qa(self):
         if self.qa_running or self.is_running:
             return
@@ -717,6 +775,9 @@ class App(BASE_TK):
         if self.ai_verify_running and self.ai_verify_process is not None:
             self._kill_ai_test(self.ai_verify_process)
             self.log('已要求中止 AI 模型自測。')
+        if self.ai_install_running and self.ai_install_process is not None:
+            self._kill_ai_test(self.ai_install_process)
+            self.log('已要求中止選裝 AI 模組安裝。')
 
     def _drain_events(self):
         try:
@@ -740,6 +801,21 @@ class App(BASE_TK):
                         except Exception as exc:
                             self.stop_preview()
                             self.log(f'A/B 無法播放：{exc}')
+                elif event[0]=='ai_install_result':
+                    _,module,success,detail=event
+                    self.ai_install_running=False
+                    self.state_label.config(text='AI 安裝完成' if success else 'AI 安裝失敗',
+                                            fg=GOOD if success else WARNING)
+                    if detail.strip(): self.log(detail[-1700:])
+                    self.log(f'{module}：安裝{"成功" if success else "未完成"}')
+                    if success:
+                        messagebox.showinfo('AI 安裝完成',
+                            f'{module} 已安裝在獨立 AI 環境。現在可以選擇該功能直接處理錄音。')
+                        # Force tool options to refresh their default model path.
+                        self.saved_options.pop('ai_denoise' if module=='denoise' else module,None)
+                    else:
+                        messagebox.showwarning('AI 安裝失敗',
+                            f'{module} 安裝未完成。請查看 PROCESS LOG，或使用 setup_ai_windows.bat 重試。')
                 elif event[0]=='ai_verify_result':
                     _,name,returncode,out,error=event
                     self.ai_verify_running=False
@@ -857,6 +933,8 @@ class App(BASE_TK):
             core.cancel()
         if self.ai_verify_process is not None:
             self._kill_ai_test(self.ai_verify_process)
+        if self.ai_install_process is not None:
+            self._kill_ai_test(self.ai_install_process)
         self.stop_preview()
         self.destroy()
 

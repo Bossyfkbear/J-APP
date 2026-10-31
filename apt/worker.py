@@ -50,6 +50,10 @@ def run_job(operation, source=None, *, model_dir=None, model_name=None,
             raise JobCancelled('已取消')
 
     check_cancel()
+    # The GUI and CLI can use the explicitly installed local model without
+    # requiring the user to browse for a directory after selecting a module.
+    from aptk.ai_control import installed_model_dir
+    model_dir = installed_model_dir(operation, model_dir)
     target = Path(destination).resolve() if destination else None
     if operation not in ('status', 'pitch', 'meter') and target is None:
         raise ValueError('An output destination is required')

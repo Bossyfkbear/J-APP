@@ -235,3 +235,7 @@ The main Windows development workflow now (after the frozen GUI checks) runs the
 ## Beat-tracker numerical acceptance
 
 The real Beat This! test now checks the **measured tempo** and a nonempty beat timeline, rather than only checking the presence of `beat_seconds` keys. For the deterministic 120 BPM click fixture, acceptance requires 4+ detected beats and 100–140 BPM (generous 20 BPM tolerance). The report preserves beat/downbeat counts and tempo. If actual inference misses that reference, the CI fails and the limitation must be addressed instead of being called a pass.
+
+## Windows one-click optional AI setup
+
+On the **Environment Check** panel, choose the desired AI module and click **安裝所選 AI 模組**. Installation requires explicit approval. Only the chosen module is installed in an isolated `.apt-ai` Python 3.11 environment; DeepFilterNet, Demucs and Beat This! also download the requested official SHA256-pinned model (with a disk-space warning). There is a cancellable 30-minute installation limit, and installation results appear in the process log. When installation finishes, the desktop app **automatically discovers** the canonical model folder on the next tool selection; manually selected model folders remain supported. The default core EXE remains small and retains source audio unchanged.
