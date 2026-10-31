@@ -255,3 +255,7 @@ The Environment Check panel includes **安裝／修復 FFmpeg（Windows）**. It
 ## BPM / key: results-only popup (V2.3.1)
 
 Selecting **BPM／調性** and clicking **開始處理** now opens a single compact result popup containing only `BPM:`, `拍號:`, and `調性:` after the audio has been analyzed. The GUI no longer dumps analysis JSON or creates a text report for this operation. The time signature is shown as **無法判定** when it cannot be reliably detected, rather than fabricating 4/4; the separately installed Beat This! model provides its own beat/downbeat tool. Multi-file jobs show one grouped result popup with each filename.
+
+## V2.3.2 — results-first desktop workflow
+
+All 25 audio tool panels now return a concise, readable **完成結果** popup: processing tools show the output file or folder; analysis tools show values, timestamps or comparison summaries; rhythm shows only BPM, time signature and key; setup shows which core/AI modules are ready. Batched files are consolidated into one bounded summary rather than flooding dialogs. Technical machine-readable reports may still be saved behind the scenes for auditing, but no raw JSON, FFmpeg command lines or Python traceback appears in the normal GUI. The previous PROCESS LOG panel is hidden by default, retaining an internal diagnostic buffer. Errors are summarized in plain language and the original source files stay unchanged.

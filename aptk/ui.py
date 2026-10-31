@@ -321,7 +321,7 @@ class App(BASE_TK):
         tk.Checkbutton(adjust,text='預聽響度匹配',variable=self.ab_match,bg=SURFACE,fg=FG,selectcolor=SURFACE_2,activebackground=SURFACE).pack(side='left')
         qc=tk.Frame(wavecard,bg=SURFACE)
         qc.pack(fill='x',padx=16,pady=(0,11))
-        self.button(qc,'生成原音／輸出技術驗收報告 JSON',self.start_technical_qa).pack(side='left')
+        self.button(qc,'檢查原音／輸出',self.start_technical_qa).pack(side='left')
         self.text(qc,'只檢查技術規格；仍需實際聽感驗收',size=9,bg=SURFACE,color=SECONDARY).pack(side='left',padx=10)
 
         control=tk.Frame(self.editor,bg=BG)
@@ -358,6 +358,9 @@ class App(BASE_TK):
         self.logbox=tk.Text(self.logframe,bg=SURFACE,fg="#BCD0D8",insertbackground=ACCENT,font=(FONT,9),relief="flat",bd=0,
                             highlightthickness=0,wrap="word",height=6,state="disabled",takefocus=0)
         self.logbox.pack(fill="both",expand=True,padx=14,pady=(0,12))
+        # Keep diagnostics internally for troubleshooting; the normal GUI
+        # displays final results only, not command output or raw JSON.
+        self.logframe.pack_forget()
         self._draw_wave()
 
     def _wheel(self,event):
@@ -568,21 +571,24 @@ class App(BASE_TK):
         files=list(self.files)
         total=1 if tool in ('ai_status', 'setup') else len(files)
         def worker():
+            from .result_view import format_result
             succeeded=0
+            summaries=[]
+            errors=[]
             try:
                 if tool == 'setup':
                     import json
                     from apt.diagnostics import collect
                     report = collect(check_gui=False)
-                    self.events.put(('log', json.dumps(report, ensure_ascii=False, indent=2)))
-                    succeeded = int(report.get('core_ready', False))
+                    summaries.append(('環境檢查',format_result('setup',report)))
+                    succeeded = 1
                 elif tool=='ai_status':
                     import json
                     from apt.worker import run_job
                     result=run_job('status', model_dir=opts.get('model_dir'),
                                    runtime_python=opts.get('runtime_python'), cancelled=core.CANCEL.is_set)
-                    self.events.put(('log',json.dumps(result,ensure_ascii=False,indent=2)))
-                    succeeded=int(result.get('ready',False))
+                    summaries.append(('AI 模型狀態',format_result('ai_status',result)))
+                    succeeded = 1
                 elif tool=="rhythm":
                     import json
                     from .rhythm_result import format_summary
@@ -592,17 +598,17 @@ class App(BASE_TK):
                             break
                         try:
                             raw=json.loads(core.estimate_bpm_key(file))
-                            summaries.append((file.name,format_summary(raw)))
+                            from .rhythm_result import summary_lines
+                            summaries.append((file.name,summary_lines(format_summary(raw))))
                             succeeded+=1
                         except Exception as exc:
-                            self.events.put(("rhythm_error", file.name, f"{type(exc).__name__}: {exc}"))
-                    if summaries:
-                        self.events.put(("rhythm_results", summaries))
+                            errors.append((file.name,str(exc)))
                 elif tool=="rename":
                     results=core.copy_renamed(files,opts,lambda x:self.events.put(("log",x)))
                     succeeded=len(results)
                     if results:
                         self.events.put(("output",results[-1]))
+                        summaries.append(('批次重新命名',f'完成 {len(results)} 個檔案\n輸出資料夾：{results[0].parent}'))
                 elif tool in ("compare", "align", "verify"):
                     if tool == 'verify':
                         import json
@@ -612,7 +618,7 @@ class App(BASE_TK):
                         msg=(core.compare_files(files[0],files[1]) if tool=="compare"
                              else core.estimate_alignment(files[0],files[1]))
                     path=core.save_report(files[0], '_'+tool, opts, msg)
-                    self.events.put(("log",msg))
+                    summaries.append(('檔案比對',format_result(tool,msg,path)))
                     self.events.put(("output",path))
                     succeeded=len(files)
                 else:
@@ -622,19 +628,21 @@ class App(BASE_TK):
                         self.events.put(("log",f"[{i}/{len(files)}] {p.name}"))
                         try:
                             msg,generated=core.run_tool(tool,p,opts)
-                            self.events.put(("log",msg))
+                            summaries.append((p.name,format_result(tool,msg,generated)))
                             if generated:
                                 self.events.put(("output",generated,p))
                             succeeded+=1
                         except core.ToolkitError as e:
-                            self.events.put(("log","失敗："+str(e)))
+                            errors.append((p.name,str(e)))
                             if "已取消" in str(e):
                                 break
                         except Exception as e:
-                            self.events.put(("log",f"處理失敗：{type(e).__name__}: {str(e)[:250]}"))
+                            errors.append((p.name,str(e)))
+                self.events.put(("result_batch",tool,summaries,errors))
                 self.events.put(("finished",succeeded,total,core.CANCEL.is_set()))
             except Exception as e:
-                self.events.put(("log",f"操作失敗：{e}"))
+                errors.append(('操作失敗',str(e)))
+                self.events.put(("result_batch",tool,summaries,errors))
                 self.events.put(("finished",succeeded,total,core.CANCEL.is_set()))
         self.worker_thread=threading.Thread(target=worker,daemon=False)
         self.worker_thread.start()
@@ -841,17 +849,15 @@ class App(BASE_TK):
                         except Exception as exc:
                             self.stop_preview()
                             self.log(f'A/B 無法播放：{exc}')
-                elif event[0]=='rhythm_results':
-                    from .rhythm_result import summary_lines
-                    results=event[1]
-                    if len(results)==1:
-                        messagebox.showinfo('BPM／調性', summary_lines(results[0][1]))
-                    else:
-                        messagebox.showinfo('BPM／調性',
-                            '\n\n'.join(f'{name}\n{summary_lines(info)}' for name,info in results))
-                elif event[0]=='rhythm_error':
-                    _,name,error=event
-                    messagebox.showerror('BPM／調性', f'{name}\n無法分析：{error}')
+                elif event[0]=='result_batch':
+                    from .result_view import format_batch
+                    _,completed_tool,results,errors=event
+                    label=TOOL_INFO[completed_tool][0]
+                    body=format_batch(results,errors)
+                    if errors:
+                        messagebox.showwarning(label + '：完成結果',body)
+                    elif results:
+                        messagebox.showinfo(label + '：完成結果',body)
                 elif event[0]=='ai_install_result':
                     _,module,success,detail=event
                     self.ai_install_running=False
@@ -866,7 +872,7 @@ class App(BASE_TK):
                         self.saved_options.pop('ai_denoise' if module=='denoise' else module,None)
                     else:
                         messagebox.showwarning('AI 安裝失敗',
-                            f'{module} 安裝未完成。請查看 PROCESS LOG，或使用 setup_ai_windows.bat 重試。')
+                            f'{module} 安裝未完成。請確認網路與磁碟空間，或使用 setup_ai_windows.bat 重試。')
                 elif event[0]=='ai_verify_result':
                     _,name,returncode,out,error=event
                     self.ai_verify_running=False
@@ -878,7 +884,7 @@ class App(BASE_TK):
                             f'{name} 已完成合成測試音的本機推論。這不代表對真人錄音的音質驗收。')
                     else:
                         messagebox.showwarning('AI 自測失敗',
-                            f'{name} 本機模型運算未通過。請查看 PROCESS LOG 的套件／模型錯誤。')
+                            f'{name} 本機模型運算未通過。請檢查模組與模型是否完整安裝。')
                 elif event[0]=='qa_ready':
                     _,path,ok,error=event
                     self.qa_running=False
@@ -913,8 +919,7 @@ class App(BASE_TK):
                     self.is_running=False
                     self.runbtn.configure(state="normal",bg=ACCENT)
                     self.state_label.config(text="已取消" if cancelled else f"完成 {n}/{total}",fg=WARNING if cancelled or n<total else GOOD)
-                    if self.tool != 'rhythm':
-                        self.log(f"工作結束｜成功 {n}/{total}"+("｜使用者取消" if cancelled else ""))
+                    self.log(f"工作結束｜成功 {n}/{total}"+("｜使用者取消" if cancelled else ""))
         except queue.Empty:
             pass
         self.after(100,self._drain_events)
