@@ -231,3 +231,7 @@ The separate [Windows real pretrained audio-model acceptance](https://github.com
 ## Packaged Windows external-AI end-to-end acceptance
 
 The main Windows development workflow now (after the frozen GUI checks) runs the actual shipped `setup_ai_windows.bat --module pitch` and `verify_ai_windows.bat --module pitch` from inside the complete EXE release folder. This tests venv creation, pinned `librosa` installation, staging of the external Python worker, real pYIN processing on synthetic audio, source SHA256 preservation and 220Hz accuracy. The temporary optional `.apt-ai` is removed **before ZIP packaging**, so the portable core remains lightweight. The small UTF-8 `native-pitch-inference.json` is included as technical evidence. Other pretrained models passed in their own Windows CPU acceptance jobs; device playback and listening QA remain workstation-only.
+
+## Beat-tracker numerical acceptance
+
+The real Beat This! test now checks the **measured tempo** and a nonempty beat timeline, rather than only checking the presence of `beat_seconds` keys. For the deterministic 120 BPM click fixture, acceptance requires 4+ detected beats and 100–140 BPM (generous 20 BPM tolerance). The report preserves beat/downbeat counts and tempo. If actual inference misses that reference, the CI fails and the limitation must be addressed instead of being called a pass.

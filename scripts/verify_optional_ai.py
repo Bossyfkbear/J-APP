@@ -96,9 +96,20 @@ def verify_result(module, result, destination):
             raise RuntimeError(f'Too few voiced frames in reference: {voiced_count}')
         return {'median_voiced_hz':median,'voiced_frames':voiced_count,
                 'total_frames':len(frames),'expected_reference_hz':220}
-    if module=='meter' and not isinstance(result.get('beat_seconds'),list):
-        raise RuntimeError('Beat model did not produce beat timeline')
-    return {'result_keys':sorted(result.keys())}
+    if module == 'meter':
+        beats = result.get('beat_seconds')
+        downbeats = result.get('downbeat_seconds')
+        tempo = result.get('tempo_bpm')
+        if (not isinstance(beats, list) or len(beats) < 4
+                or not isinstance(downbeats, list)
+                or not isinstance(tempo, (int, float)) or not math.isfinite(tempo)):
+            raise RuntimeError('Beat This! produced no usable beat timeline or BPM')
+        if not 100 <= tempo <= 140:
+            raise RuntimeError(f'Known 120 BPM click reference measured {tempo:.2f} BPM, outside 100–140')
+        return {'tempo_bpm': float(tempo), 'beat_count': len(beats),
+                'downbeat_count': len(downbeats), 'expected_click_reference_bpm': 120,
+                'reference_tolerance_bpm': 20}
+    return {'result_keys': sorted(result.keys())}
 
 
 def run(module, root=ROOT):
