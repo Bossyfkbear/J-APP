@@ -263,3 +263,7 @@ All 25 audio tool panels now return a concise, readable **完成結果** popup: 
 ## V2.3.3 — four integrated category workspaces
 
 The desktop sidebar is now consolidated into **four major categories** only: **轉換與交件**, **修復**, **音樂與 AI**, and **音色與檔案**. Choosing a category opens one integrated workspace with its tools in a compact grid at the top. For example, **修復** includes WPE dereverb, noise residual, declick, declip and de-ess, while **音樂與 AI** includes neural denoise/separation, BPM/key, beat tracking, pitch and chord/progression analysis. Moving between a category's tools retains selected source files, output folder and per-tool settings, and each action still provides only a concise user-readable result popup rather than raw logs. All 25 existing independent processing functions remain in place.
+
+## V2.3.4 — smooth high-resolution waveform display
+
+The previous 360-bin wide vertical bar preview has been replaced with a higher-detail (up to 2,400 bins) signed min/max waveform envelope and a continuous RMS body, similar to modern DAW editors. The 108px-tall display adapts to window resizing using per-pixel extrema preserving audible transients, with unobtrusive rulers and accurate preview duration. FFmpeg decodes a bounded 120-second preview to 6kHz mono float **only for the preview**; source media and export formats remain untouched. No new required packages or GPU dependencies. Original `waveform_peaks` API remains for backward compatibility; new pure functions are regression tested.

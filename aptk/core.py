@@ -634,6 +634,46 @@ def run_tool(tool: str, src: Path, opts: dict) -> tuple[str, Path | None]:
     return f"完成：{src.name} → {p.name}", p
 
 
+def waveform_envelope(src: Path, *, bins: int = 2400, max_seconds: int = 120) -> dict:
+    """High-resolution waveform preview using real min/max extrema and RMS.
+
+    Analyze only a bounded mono preview in memory. Unlike maximum-only vertical
+    bars, the returned envelope retains signed dynamics and the quiet passages.
+    This never modifies, resamples or overwrites the original audio file.
+    """
+    if not 128 <= bins <= 8192:
+        raise ValueError("waveform bins must be 128..8192")
+    if not 1 <= max_seconds <= 120:
+        raise ValueError("waveform duration must be 1..120 seconds")
+    ffmpeg, _ = require_ffmpeg()
+    analysis_rate = 6000
+    cmd = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error",
+           "-i", str(src), "-map", "0:a:0", "-t", str(max_seconds),
+           "-ac", "1", "-ar", str(analysis_rate), "-f", "f32le", "-"]
+    data = run_binary_command(cmd, timeout=45, track_active=False)
+    if not data:
+        return {"samples": [], "duration_seconds": 0.0}
+    samples = array.array("f")
+    samples.frombytes(data[:(len(data)//4)*4])
+    if sys.byteorder == "big":
+        samples.byteswap()
+    n = len(samples)
+    block = max(1, math.ceil(n / bins))
+    envelope = []
+    for start in range(0, n, block):
+        chunk = samples[start:start+block]
+        # Handle malformed float WAVs robustly instead of drawing NaN geometry.
+        valid = [min(1.0, max(-1.0, float(s))) for s in chunk if math.isfinite(s)]
+        if not valid:
+            envelope.append((0.0, 0.0, 0.0))
+            continue
+        low = min(valid)
+        high = max(valid)
+        rms = math.sqrt(math.fsum(value*value for value in valid) / len(valid))
+        envelope.append((round(low, 6), round(high, 6), round(rms, 6)))
+    return {"samples": envelope, "duration_seconds": round(n / analysis_rate, 3)}
+
+
 def waveform_peaks(src: Path, bins: int = 360) -> list[float]:
     """First 2 minutes only. Constant memory, no scientific Python dependencies."""
     ffmpeg, _ = require_ffmpeg()

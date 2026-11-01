@@ -183,7 +183,8 @@ class App(BASE_TK):
         self.ab_seconds = tk.StringVar(value='30')
         self.ab_offset = tk.StringVar(value='0')
         self.ab_match = tk.BooleanVar(value=False)
-        self.waveform: list[float] = []
+        self.waveform = []
+        self.waveform_seconds = 0.0
         self.waveform_request = 0
         self._init_styles()
         self._build()
@@ -318,7 +319,7 @@ class App(BASE_TK):
         self.text(top,"WAVEFORM PREVIEW",size=9,bold=True,bg=SURFACE,color=SECONDARY).pack(side="left")
         self.waveinfo=self.text(top,"前 120 秒",size=9,bg=SURFACE,color=SECONDARY)
         self.waveinfo.pack(side="right")
-        self.wavecanvas=tk.Canvas(wavecard,bg=SURFACE,height=66,highlightthickness=0)
+        self.wavecanvas=tk.Canvas(wavecard,bg=SURFACE,height=108,highlightthickness=0)
         self.wavecanvas.pack(fill="x",padx=15,pady=(2,8))
         self.wavecanvas.bind("<Configure>",lambda e:self._draw_wave())
         pre=tk.Frame(wavecard,bg=SURFACE)
@@ -544,29 +545,44 @@ class App(BASE_TK):
         self.waveinfo.config(text="載入波形…")
         def load():
             try:
-                data=core.waveform_peaks(path)
+                data=core.waveform_envelope(path)
             except Exception:
                 data=[]
             self.events.put(("wave",request,data))
         threading.Thread(target=load,daemon=True).start()
 
     def _draw_wave(self):
-        c=self.wavecanvas
+        from .waveform_view import waveform_polygons
+        c = self.wavecanvas
         c.delete("all")
-        w=max(c.winfo_width(),400)
-        h=max(c.winfo_height(),76)
-        for yy in (h*.25,h*.5,h*.75):
-            c.create_line(0,yy,w,yy,fill="#31404F",width=1)
-        for xx in range(0,w,100):
-            c.create_line(xx,0,xx,h,fill="#2A3645",width=1)
+        w = max(1, c.winfo_width())
+        h = max(1, c.winfo_height())
+        # Thin, discreet DAW-style reference lines instead of chunky blocks.
+        for y in (h*.25, h*.75):
+            c.create_line(0, y, w, y, fill="#293743", width=1)
+        c.create_line(0, h*.5, w, h*.5, fill="#435363", width=1)
         if self.waveform:
-            total=len(self.waveform)
-            for i,v in enumerate(self.waveform):
-                x=round(i/total*w)
-                amp=max(2,v*(h*.44))
-                c.create_line(x,h/2-amp,x,h/2+amp,fill=ACCENT,width=max(1,w//total))
+            duration = self.waveform_seconds
+            for step in range(1, 4):
+                x = round(w * step / 4)
+                c.create_line(x, 0, x, h, fill="#263440", width=1)
+            peaks, body = waveform_polygons(self.waveform, w, h, margin=9)
+            if len(peaks) >= 6:
+                c.create_polygon(*peaks, fill="#318C9F", outline="")
+            if len(body) >= 6:
+                c.create_polygon(*body, fill=ACCENT, outline="")
+            # Dynamic, readable time guide without affecting original audio.
+            if duration > 0:
+                c.create_text(8, h-7, text="00:00", anchor="w",
+                              fill="#9DB2BE", font=(FONT, 8))
+                seconds = int(round(duration))
+                c.create_text(w-8, h-7,
+                              text=f"{seconds // 60:02d}:{seconds % 60:02d}",
+                              anchor="e", fill="#9DB2BE", font=(FONT, 8))
         else:
-            c.create_text(w/2,h/2,text="DROP-IN AUDIO WAVEFORM  ·  請新增音檔",fill="#5F7685",font=(FONT,10))
+            c.create_text(w/2, h/2,
+                          text="拖入或新增音檔即可預覽波形",
+                          fill="#78919D", font=(FONT, 10))
 
     def pick_folder(self):
         folder=filedialog.askdirectory(title="指定輸出資料夾")
@@ -962,8 +978,9 @@ class App(BASE_TK):
                 elif event[0]=="wave":
                     _,req,data=event
                     if req==self.waveform_request:
-                        self.waveform=data
-                        self.waveinfo.config(text="前 120 秒波形" if data else "無法預覽")
+                        self.waveform = data.get("samples", []) if isinstance(data, dict) else []
+                        self.waveform_seconds = data.get("duration_seconds", 0) if isinstance(data, dict) else 0
+                        self.waveinfo.config(text=("高解析波形預覽" if self.waveform else "無法預覽"))
                         self._draw_wave()
                 elif event[0]=="finished":
                     _,n,total,cancelled=event
