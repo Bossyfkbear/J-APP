@@ -50,3 +50,39 @@ def waveform_polygons(envelope, width: int, height: int, *, margin: int = 6):
     outer = upper + [v for pair in reversed(lower_pairs) for v in pair]
     inner = inner_top + [v for pair in reversed(inner_pairs) for v in pair]
     return outer, inner
+
+
+
+def clamp_viewport(start: float, span: float, total: float) -> tuple[float,float]:
+    if not all(math.isfinite(float(v)) for v in (start,span,total)):
+        raise ValueError("Waveform viewport must be finite")
+    total=max(0.,float(total))
+    span=max(.1,min(120.,float(span)))
+    if total>0:
+        span=min(total,span)
+    start=max(0.,min(float(start),max(0.,total-span)))
+    return round(start,4),round(span,4)
+
+
+def zoom_viewport(start: float, span: float, total: float,
+                  factor: float, *, cursor: float | None = None) -> tuple[float,float]:
+    if not math.isfinite(factor) or factor <= 0:
+        raise ValueError("Waveform zoom must be positive")
+    start,span=clamp_viewport(start,span,total)
+    new_span=max(min(1.,total) if total>0 else 1.,min(120.,span/factor))
+    anchor=start+span/2 if cursor is None else max(start,min(start+span,cursor))
+    ratio=max(0.,min(1.,(anchor-start)/span))
+    return clamp_viewport(anchor-ratio*new_span,new_span,total)
+
+
+def format_time(seconds: float) -> str:
+    if not math.isfinite(seconds) or seconds<0:
+        return "--:--"
+    minutes,secs=divmod(seconds,60)
+    return f"{int(minutes):02d}:{secs:04.1f}"
+
+
+def cursor_seconds(x: float, width: int, start: float, span: float) -> float:
+    if width<=0 or not all(math.isfinite(v) for v in (x,start,span)):
+        raise ValueError("Invalid waveform cursor geometry")
+    return round(start+max(0.,min(1.,x/width))*span,3)

@@ -634,44 +634,64 @@ def run_tool(tool: str, src: Path, opts: dict) -> tuple[str, Path | None]:
     return f"完成：{src.name} → {p.name}", p
 
 
-def waveform_envelope(src: Path, *, bins: int = 2400, max_seconds: int = 120) -> dict:
-    """High-resolution waveform preview using real min/max extrema and RMS.
-
-    Analyze only a bounded mono preview in memory. Unlike maximum-only vertical
-    bars, the returned envelope retains signed dynamics and the quiet passages.
-    This never modifies, resamples or overwrites the original audio file.
-    """
-    if not 128 <= bins <= 8192:
+def waveform_envelope(src: Path, *, bins: int = 2400,
+                      max_seconds: float = 120, start_seconds: float = 0) -> dict:
+    """Seekable, high-detail signed peak/RMS preview; original file stays intact."""
+    if not isinstance(bins, int) or not 128 <= bins <= 8192:
         raise ValueError("waveform bins must be 128..8192")
-    if not 1 <= max_seconds <= 120:
-        raise ValueError("waveform duration must be 1..120 seconds")
+    if not math.isfinite(max_seconds) or not 0.1 <= max_seconds <= 120:
+        raise ValueError("waveform duration must be 0.1..120 seconds")
+    if not math.isfinite(start_seconds) or start_seconds < 0:
+        raise ValueError("waveform seek must be nonnegative and finite")
     ffmpeg, _ = require_ffmpeg()
     analysis_rate = 6000
     cmd = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error",
-           "-i", str(src), "-map", "0:a:0", "-t", str(max_seconds),
-           "-ac", "1", "-ar", str(analysis_rate), "-f", "f32le", "-"]
-    data = run_binary_command(cmd, timeout=45, track_active=False)
-    if not data:
-        return {"samples": [], "duration_seconds": 0.0}
-    samples = array.array("f")
-    samples.frombytes(data[:(len(data)//4)*4])
-    if sys.byteorder == "big":
-        samples.byteswap()
-    n = len(samples)
+           "-ss", f"{start_seconds:.6f}", "-i", str(src), "-map", "0:a:0",
+           "-t", f"{max_seconds:.6f}", "-ac", "1", "-ar", str(analysis_rate),
+           "-f", "f32le", "-"]
+    payload = run_binary_command(cmd, timeout=45, track_active=False)
+    n = len(payload) // 4
+    if not n:
+        return {"samples": [], "duration_seconds": 0.0,
+                "start_seconds": start_seconds, "source_duration_seconds": 0.0}
     block = max(1, math.ceil(n / bins))
-    envelope = []
-    for start in range(0, n, block):
-        chunk = samples[start:start+block]
-        # Handle malformed float WAVs robustly instead of drawing NaN geometry.
-        valid = [min(1.0, max(-1.0, float(s))) for s in chunk if math.isfinite(s)]
-        if not valid:
-            envelope.append((0.0, 0.0, 0.0))
-            continue
-        low = min(valid)
-        high = max(valid)
-        rms = math.sqrt(math.fsum(value*value for value in valid) / len(valid))
-        envelope.append((round(low, 6), round(high, 6), round(rms, 6)))
-    return {"samples": envelope, "duration_seconds": round(n / analysis_rate, 3)}
+    if importlib.util.find_spec("numpy") is not None:
+        import numpy as np
+        signal = np.frombuffer(payload[:n*4], dtype="<f4")
+        clean = np.clip(np.nan_to_num(signal, nan=0., posinf=0., neginf=0.), -1., 1.)
+        offsets = np.arange(0, n, block)
+        counts = np.minimum(block, n-offsets)
+        lows = np.minimum.reduceat(clean, offsets)
+        highs = np.maximum.reduceat(clean, offsets)
+        rms = np.sqrt(np.add.reduceat(clean.astype(np.float64)**2, offsets)/counts)
+        envelope = list(zip(np.round(lows,6).tolist(), np.round(highs,6).tolist(),
+                            np.round(rms,6).tolist()))
+    else:
+        signal = array.array("f")
+        signal.frombytes(payload[:n*4])
+        if sys.byteorder == "big":
+            signal.byteswap()
+        envelope = []
+        for start in range(0, n, block):
+            points = [max(-1., min(1., float(v))) for v in signal[start:start+block]
+                      if math.isfinite(v)]
+            if not points:
+                envelope.append((0., 0., 0.))
+                continue
+            energy = math.fsum(v*v for v in points) / len(points)
+            envelope.append((round(min(points),6),round(max(points),6),
+                             round(math.sqrt(energy),6)))
+    analyzed = n/analysis_rate
+    total = start_seconds + analyzed
+    try:
+        value = float(probe(src).get("format",{}).get("duration") or 0.)
+        if math.isfinite(value) and value > 0:
+            total = max(total,value)
+    except (ToolkitError, ValueError, TypeError, OSError):
+        pass
+    return {"samples":envelope, "duration_seconds":round(analyzed,4),
+            "start_seconds":round(start_seconds,4),
+            "source_duration_seconds":round(total,4)}
 
 
 def waveform_peaks(src: Path, bins: int = 360) -> list[float]:
