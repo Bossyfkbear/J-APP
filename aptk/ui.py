@@ -185,7 +185,14 @@ class App(BASE_TK):
         self.ab_match = tk.BooleanVar(value=False)
         self.waveform = []
         self.waveform_seconds = 0.0
+        self.waveform_start = 0.0
+        self.waveform_span = 120.0
+        self.waveform_total = 0.0
+        self.waveform_cursor = None
         self.waveform_request = 0
+        self.waveform_reload_after = None
+        self.waveform_redraw_after = None
+        self.waveform_seek_updating = False
         self._init_styles()
         self._build()
         self.after(100, self._drain_events)
@@ -317,11 +324,34 @@ class App(BASE_TK):
         top=tk.Frame(wavecard,bg=SURFACE)
         top.pack(fill="x",padx=16,pady=(10,0))
         self.text(top,"WAVEFORM PREVIEW",size=9,bold=True,bg=SURFACE,color=SECONDARY).pack(side="left")
-        self.waveinfo=self.text(top,"前 120 秒",size=9,bg=SURFACE,color=SECONDARY)
+        self.waveinfo=self.text(top,"波形預覽",size=9,bg=SURFACE,color=SECONDARY)
         self.waveinfo.pack(side="right")
-        self.wavecanvas=tk.Canvas(wavecard,bg=SURFACE,height=108,highlightthickness=0)
-        self.wavecanvas.pack(fill="x",padx=15,pady=(2,8))
-        self.wavecanvas.bind("<Configure>",lambda e:self._draw_wave())
+        wave_controls=tk.Frame(wavecard,bg=SURFACE)
+        wave_controls.pack(fill="x",padx=16,pady=(0,5))
+        self.text(wave_controls,"點波形設定預聽起點",size=9,bg=SURFACE,color=SECONDARY).pack(side="left")
+        for caption,action in (
+            ("←",lambda:self.pan_wave(-1)),
+            ("→",lambda:self.pan_wave(1)),
+            ("−",lambda:self.zoom_wave(.5)),
+            ("＋",lambda:self.zoom_wave(2)),
+            ("120秒",self.reset_wave_zoom),
+        ):
+            self.button(wave_controls,caption,action).pack(side="right",padx=(5,0))
+        self.wavecanvas=tk.Canvas(wavecard,bg=SURFACE,height=120,
+                                  highlightthickness=0,cursor="crosshair")
+        self.wavecanvas.pack(fill="x",padx=15,pady=(2,3))
+        self.wavecanvas.bind("<Configure>",self._schedule_wave_redraw)
+        self.wavecanvas.bind("<Button-1>",self._wave_click)
+        self.wavecanvas.bind("<MouseWheel>",self._wave_wheel)
+        self.wavecanvas.bind("<Button-4>",lambda e:self.zoom_wave(2,e.x))
+        self.wavecanvas.bind("<Button-5>",lambda e:self.zoom_wave(.5,e.x))
+        self.wave_seek=tk.Scale(wavecard,from_=0,to=100,orient="horizontal",
+                                resolution=.1,showvalue=False,length=400,sliderlength=16,
+                                width=9,bd=0,highlightthickness=0,
+                                bg=SURFACE,fg=FG,troughcolor="#273846",
+                                activebackground=ACCENT,command=self._wave_seek_changed)
+        self.wave_seek.pack(fill="x",padx=16,pady=(0,8))
+        self.wave_seek.config(state="disabled")
         pre=tk.Frame(wavecard,bg=SURFACE)
         pre.pack(fill="x",padx=16,pady=(0,11))
         self.button(pre,"▶ 原音預聽",lambda:self.play_audio(False)).pack(side="left")
@@ -518,7 +548,15 @@ class App(BASE_TK):
             self.file_list.select_set(0)
             self.load_waveform(self.files[0])
         else:
-            self.waveform=[]
+            self.waveform_request += 1
+            if self.waveform_reload_after is not None:
+                self.after_cancel(self.waveform_reload_after)
+                self.waveform_reload_after = None
+            self.waveform = []
+            self.waveform_seconds = 0.
+            self.waveform_total = 0.
+            self.waveform_cursor = None
+            self._update_wave_seek()
             self._draw_wave()
 
     def remove_selected(self):
@@ -540,49 +578,168 @@ class App(BASE_TK):
             self.load_waveform(self.files[ix[0]])
 
     def load_waveform(self, path: Path):
-        self.waveform_request+=1
-        request=self.waveform_request
+        """Read a bounded audio window asynchronously; ignore stale results."""
+        if self.waveform_reload_after is not None:
+            self.after_cancel(self.waveform_reload_after)
+            self.waveform_reload_after = None
+        self.waveform_request += 1
+        self.waveform = []
+        self.waveform_seconds = 0.
+        self.waveform_start = 0.
+        self.waveform_span = 120.
+        self.waveform_total = 0.
+        self.waveform_cursor = None
         self.waveinfo.config(text="載入波形…")
+        self.wave_seek.config(state="disabled")
+        self._draw_wave()
+        self._request_waveform(path)
+
+    def _request_waveform(self, path: Path):
+        self.waveform_request += 1
+        request = self.waveform_request
+        start = self.waveform_start
+        span = self.waveform_span
         def load():
             try:
-                data=core.waveform_envelope(path)
+                data = core.waveform_envelope(path, start_seconds=start, max_seconds=span)
             except Exception:
-                data=[]
-            self.events.put(("wave",request,data))
-        threading.Thread(target=load,daemon=True).start()
+                data = {"samples":[], "duration_seconds":0., "start_seconds":start}
+            self.events.put(("wave", request, data))
+        threading.Thread(target=load, daemon=True).start()
+
+    def _schedule_wave_reload(self):
+        if not self.files:
+            return
+        self.waveform_request += 1
+        if self.waveform_reload_after is not None:
+            self.after_cancel(self.waveform_reload_after)
+        self.waveform = []
+        self.waveform_seconds = 0.
+        self.waveinfo.config(text="更新波形…")
+        self._draw_wave()
+        self.waveform_reload_after = self.after(180, self._reload_waveform)
+
+    def _reload_waveform(self):
+        self.waveform_reload_after = None
+        if self.files:
+            selected = self.file_list.curselection()
+            path = self.files[selected[0]] if selected and selected[0] < len(self.files) else self.files[0]
+            self._request_waveform(path)
+
+    def _update_wave_seek(self):
+        self.waveform_seek_updating = True
+        try:
+            available = max(0., self.waveform_total - self.waveform_span)
+            if available <= .001:
+                self.wave_seek.config(state="disabled")
+                self.wave_seek.set(0.)
+            else:
+                self.wave_seek.config(state="normal")
+                self.wave_seek.set(self.waveform_start / available * 100.)
+        finally:
+            self.waveform_seek_updating = False
+
+    def _wave_seek_changed(self, value):
+        if self.waveform_seek_updating or self.waveform_total <= 0:
+            return
+        from .waveform_view import clamp_viewport
+        available = max(0., self.waveform_total - self.waveform_span)
+        target = available * float(value) / 100.
+        start,span = clamp_viewport(target, self.waveform_span, self.waveform_total)
+        if abs(start - self.waveform_start) >= .02:
+            self.waveform_start, self.waveform_span = start,span
+            self._schedule_wave_reload()
+
+    def zoom_wave(self, factor, pixel=None):
+        if self.waveform_total <= 0:
+            return
+        from .waveform_view import zoom_viewport, cursor_seconds
+        anchor = (cursor_seconds(pixel,max(1,self.wavecanvas.winfo_width()),
+                                 self.waveform_start,self.waveform_span)
+                  if pixel is not None else self.waveform_cursor)
+        start,span=zoom_viewport(self.waveform_start,self.waveform_span,
+                                 self.waveform_total,factor,cursor=anchor)
+        if (start,span)==(self.waveform_start,self.waveform_span):
+            return
+        self.waveform_start,self.waveform_span=start,span
+        self._update_wave_seek()
+        self._schedule_wave_reload()
+
+    def pan_wave(self, direction):
+        if self.waveform_total <= 0:
+            return
+        from .waveform_view import clamp_viewport
+        start,span=clamp_viewport(self.waveform_start + direction*self.waveform_span*.75,
+                                  self.waveform_span,self.waveform_total)
+        if start!=self.waveform_start:
+            self.waveform_start,self.waveform_span=start,span
+            self._update_wave_seek()
+            self._schedule_wave_reload()
+
+    def reset_wave_zoom(self):
+        if self.waveform_total <= 0:
+            return
+        from .waveform_view import clamp_viewport
+        self.waveform_start,self.waveform_span=clamp_viewport(0.,120.,self.waveform_total)
+        self._update_wave_seek()
+        self._schedule_wave_reload()
+
+    def _wave_click(self, event):
+        if self.waveform_total <= 0:
+            return
+        from .waveform_view import cursor_seconds,format_time
+        chosen=cursor_seconds(event.x,max(1,self.wavecanvas.winfo_width()),
+                              self.waveform_start,self.waveform_span)
+        self.waveform_cursor=min(chosen,self.waveform_total)
+        self.ab_start.set(f"{self.waveform_cursor:.2f}")
+        self.waveinfo.config(text=f"預聽起點 {format_time(self.waveform_cursor)}")
+        self._draw_wave()
+
+    def _wave_wheel(self, event):
+        if event.delta:
+            self.zoom_wave(2 if event.delta>0 else .5,event.x)
+        return "break"
+
+    def _schedule_wave_redraw(self, event=None):
+        if self.waveform_redraw_after is not None:
+            self.after_cancel(self.waveform_redraw_after)
+        self.waveform_redraw_after=self.after(50,self._draw_wave)
 
     def _draw_wave(self):
-        from .waveform_view import waveform_polygons
-        c = self.wavecanvas
+        from .waveform_view import waveform_polygons,format_time
+        self.waveform_redraw_after=None
+        c=self.wavecanvas
         c.delete("all")
-        w = max(1, c.winfo_width())
-        h = max(1, c.winfo_height())
-        # Thin, discreet DAW-style reference lines instead of chunky blocks.
-        for y in (h*.25, h*.75):
-            c.create_line(0, y, w, y, fill="#293743", width=1)
-        c.create_line(0, h*.5, w, h*.5, fill="#435363", width=1)
+        w=max(1,c.winfo_width())
+        h=max(1,c.winfo_height())
+        for y in (h*.25,h*.75):
+            c.create_line(0,y,w,y,fill="#293743",width=1)
+        c.create_line(0,h*.5,w,h*.5,fill="#435363",width=1)
         if self.waveform:
-            duration = self.waveform_seconds
-            for step in range(1, 4):
-                x = round(w * step / 4)
-                c.create_line(x, 0, x, h, fill="#263440", width=1)
-            peaks, body = waveform_polygons(self.waveform, w, h, margin=9)
-            if len(peaks) >= 6:
-                c.create_polygon(*peaks, fill="#318C9F", outline="")
-            if len(body) >= 6:
-                c.create_polygon(*body, fill=ACCENT, outline="")
-            # Dynamic, readable time guide without affecting original audio.
-            if duration > 0:
-                c.create_text(8, h-7, text="00:00", anchor="w",
-                              fill="#9DB2BE", font=(FONT, 8))
-                seconds = int(round(duration))
-                c.create_text(w-8, h-7,
-                              text=f"{seconds // 60:02d}:{seconds % 60:02d}",
-                              anchor="e", fill="#9DB2BE", font=(FONT, 8))
+            start=self.waveform_start
+            end=start+self.waveform_seconds
+            for step in range(1,5):
+                x=w*step/5
+                c.create_line(x,0,x,h,fill="#263440",width=1)
+            outer,body=waveform_polygons(self.waveform,w,h,margin=11)
+            if len(outer)>=6:
+                c.create_polygon(*outer,fill="#318C9F",outline="")
+            if len(body)>=6:
+                c.create_polygon(*body,fill=ACCENT,outline="")
+            for step in range(5):
+                frac=step/4
+                x=6+(w-12)*frac
+                anchor="w" if step==0 else "e" if step==4 else "center"
+                c.create_text(x,h-8,text=format_time(start+self.waveform_seconds*frac),
+                              anchor=anchor,fill="#A8B7C2",font=(FONT,8))
+            if self.waveform_cursor is not None and start<=self.waveform_cursor<=end:
+                x=(self.waveform_cursor-start)/max(.001,self.waveform_seconds)*w
+                c.create_line(x,0,x,h-20,fill="#F4CB86",width=1)
+                c.create_polygon(x-4,2,x+4,2,x,8,fill="#F4CB86",outline="")
         else:
-            c.create_text(w/2, h/2,
-                          text="拖入或新增音檔即可預覽波形",
-                          fill="#78919D", font=(FONT, 10))
+            c.create_text(w/2,h/2,text="載入波形…" if self.files else
+                          "拖入或新增音檔即可預覽波形",
+                          fill="#78919D",font=(FONT,10))
 
     def pick_folder(self):
         folder=filedialog.askdirectory(title="指定輸出資料夾")
@@ -978,9 +1135,17 @@ class App(BASE_TK):
                 elif event[0]=="wave":
                     _,req,data=event
                     if req==self.waveform_request:
+                        from .waveform_view import clamp_viewport,format_time
                         self.waveform = data.get("samples", []) if isinstance(data, dict) else []
-                        self.waveform_seconds = data.get("duration_seconds", 0) if isinstance(data, dict) else 0
-                        self.waveinfo.config(text=("高解析波形預覽" if self.waveform else "無法預覽"))
+                        self.waveform_seconds = data.get("duration_seconds", 0.) if isinstance(data, dict) else 0.
+                        self.waveform_total = data.get("source_duration_seconds", 0.) if isinstance(data, dict) else 0.
+                        if self.waveform_total:
+                            self.waveform_start,self.waveform_span = clamp_viewport(
+                                self.waveform_start,self.waveform_span,self.waveform_total)
+                        self.waveinfo.config(text=(f"{format_time(self.waveform_start)} – "
+                            f"{format_time(self.waveform_start+self.waveform_seconds)} / "
+                            f"{format_time(self.waveform_total)}" if self.waveform else "無法預覽"))
+                        self._update_wave_seek()
                         self._draw_wave()
                 elif event[0]=="finished":
                     _,n,total,cancelled=event
@@ -1004,7 +1169,12 @@ class App(BASE_TK):
         self.stop_preview()
         try:
             flags={"creationflags":getattr(subprocess,"CREATE_NO_WINDOW",0)} if os.name=="nt" else {}
-            self.preview_process=subprocess.Popen([player,"-nodisp","-autoexit","-loglevel","error",str(path)],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,**flags)
+            start=float(self.ab_start.get() or 0)
+            if not (0 <= start < float("inf")):
+                start=0.
+            self.preview_process=subprocess.Popen(
+                [player,"-nodisp","-autoexit","-loglevel","error","-ss",str(start),str(path)],
+                stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,**flags)
         except OSError as e:
             messagebox.showerror("無法播放",str(e))
 
@@ -1061,6 +1231,10 @@ class App(BASE_TK):
         if self.ai_install_process is not None:
             self._kill_ai_test(self.ai_install_process)
         self.stop_preview()
+        if self.waveform_reload_after is not None:
+            self.after_cancel(self.waveform_reload_after)
+        if self.waveform_redraw_after is not None:
+            self.after_cancel(self.waveform_redraw_after)
         self.destroy()
 
 
